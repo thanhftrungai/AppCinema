@@ -2,14 +2,16 @@ import React, { useState } from "react";
 import { Star, Clock, Calendar, Play, Flame, TrendingUp } from "lucide-react";
 import Header from "../components/layout/Header";
 import Footer from "../components/layout/Footer";
+import { Link } from "react-router-dom";
 
 // Movie Card Component
 const MovieCard = ({ movie, isUpcoming = false }) => {
   const [isHovered, setIsHovered] = useState(false);
 
   return (
-    <div
-      className="group relative rounded-xl overflow-hidden shadow-lg hover:shadow-2xl transition-all duration-500 transform hover:-translate-y-3 cursor-pointer"
+    <Link
+      to={`/movie/${movie.id}`}
+      className="group block relative rounded-xl overflow-hidden shadow-lg hover:shadow-2xl transition-all duration-500 transform hover:-translate-y-3"
       onMouseEnter={() => setIsHovered(true)}
       onMouseLeave={() => setIsHovered(false)}
     >
@@ -73,11 +75,17 @@ const MovieCard = ({ movie, isUpcoming = false }) => {
           </div>
         </div>
 
-        <button className="w-full bg-gradient-to-r from-red-600 to-red-700 hover:from-red-700 hover:to-red-800 text-white py-2.5 rounded-lg font-semibold transition-all duration-300 shadow-md hover:shadow-lg transform hover:scale-105">
-          {isUpcoming ? "Thông báo" : "Đặt vé ngay"}
-        </button>
+        {isUpcoming ? (
+          <span className="inline-block w-full text-center bg-gradient-to-r from-red-600 to-red-700 hover:from-red-700 hover:to-red-800 text-white py-2.5 rounded-lg font-semibold transition-all duration-300 shadow-md hover:shadow-lg transform hover:scale-105">
+            Thông báo
+          </span>
+        ) : (
+          <Link to={`/booking?movieId=${movie.id}`} className="inline-block w-full text-center bg-gradient-to-r from-red-600 to-red-700 hover:from-red-700 hover:to-red-800 text-white py-2.5 rounded-lg font-semibold transition-all duration-300 shadow-md hover:shadow-lg transform hover:scale-105">
+            Đặt vé ngay
+          </Link>
+        )}
       </div>
-    </div>
+    </Link>
   );
 };
 
@@ -260,9 +268,9 @@ const Home = () => {
             </div>
             <h2 className="text-4xl font-bold text-gray-900">Phim hot nhất hiện nay</h2>
           </div>
-          <a href="#" className="text-red-600 hover:text-red-700 font-semibold text-lg transition">
+          <Link to="/all" className="text-red-600 hover:text-red-700 font-semibold text-lg transition">
             Xem tất cả →
-          </a>
+          </Link>
         </div>
 
         {/* Category Filter */}
@@ -291,9 +299,9 @@ const Home = () => {
               </div>
               <h2 className="text-4xl font-bold text-gray-900">Những bộ phim sắp tới</h2>
             </div>
-            <a href="#" className="text-blue-600 hover:text-blue-700 font-semibold text-lg transition">
+            <Link to="/all" className="text-blue-600 hover:text-blue-700 font-semibold text-lg transition">
               Xem tất cả →
-            </a>
+            </Link>
           </div>
 
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">

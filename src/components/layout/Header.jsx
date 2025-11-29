@@ -1,6 +1,6 @@
 import React, { useState } from "react";
 import { Film, Search, Menu, X } from "lucide-react";
-import { Link, useNavigate } from "react-router-dom";
+import { Link } from "react-router-dom";
 
 const Header = () => {
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
@@ -21,18 +21,21 @@ const Header = () => {
 
           {/* Desktop Navigation */}
           <nav className="hidden md:flex items-center gap-8">
-            <a href="#" className="hover:text-red-500 transition">
+            <Link to="/" className="hover:text-red-500 transition">
               Trang chủ
-            </a>
-            <a href="#" className="hover:text-red-500 transition">
+            </Link>
+            <Link to="/all" className="hover:text-red-500 transition">
               Phim
-            </a>
-            <a href="#" className="hover:text-red-500 transition">
+            </Link>
+            <Link to="/cinemas" className="hover:text-red-500 transition">
               Rạp
-            </a>
-            <a href="#" className="hover:text-red-500 transition">
-              Khuyến mãi
-            </a>
+            </Link>
+            <Link to="/news" className="hover:text-red-500 transition">
+              Tin tức
+            </Link>
+            <Link to="/booking-history" className="hover:text-red-500 transition">
+              Đặt vé
+            </Link>
           </nav>
 
           {/* Right Side */}
@@ -60,34 +63,41 @@ const Header = () => {
         {isMobileMenuOpen && (
           <nav className="md:hidden py-4 border-t border-gray-800">
             <div className="flex flex-col gap-4">
-              <a
-                href="#"
+              <Link
+                to="/"
                 className="hover:text-red-500 transition py-2"
                 onClick={toggleMobileMenu}
               >
                 Trang chủ
-              </a>
-              <a
-                href="#"
+              </Link>
+              <Link
+                to="/all"
                 className="hover:text-red-500 transition py-2"
                 onClick={toggleMobileMenu}
               >
                 Phim
-              </a>
-              <a
-                href="#"
+              </Link>
+              <Link
+                to="/cinemas"
                 className="hover:text-red-500 transition py-2"
                 onClick={toggleMobileMenu}
               >
                 Rạp
-              </a>
-              <a
-                href="#"
+              </Link>
+              <Link
+                to="/news"
                 className="hover:text-red-500 transition py-2"
                 onClick={toggleMobileMenu}
               >
-                Khuyến mãi
-              </a>
+                Tin tức
+              </Link>
+              <Link
+                to="/booking-history"
+                className="hover:text-red-500 transition py-2"
+                onClick={toggleMobileMenu}
+              >
+                Đặt vé
+              </Link>
               <Link to="/login" className="px-4 py-2 bg-red-600 hover:bg-red-700 rounded-lg transition font-medium text-left" onClick={toggleMobileMenu}>
                 Đăng nhập
               </Link>
