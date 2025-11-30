@@ -19,11 +19,25 @@ const Cinemas = () => {
       <div className="container mx-auto px-4 py-10">
         <h1 className="text-3xl font-bold text-gray-900 mb-6">Hệ thống rạp</h1>
 
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+        <div className="space-y-4">
           {cinemas.map((c) => (
-            <div key={c.id} className="bg-white rounded-xl shadow p-5 hover:shadow-lg transition">
-              <h3 className="text-lg font-semibold text-gray-900">{c.name}</h3>
-              <p className="text-gray-600 mt-1 text-sm">{c.address}</p>
+            <div key={c.id} className="bg-white rounded-xl shadow hover:shadow-lg transition p-4">
+              <div className="flex flex-col sm:flex-row items-start sm:items-center gap-4">
+                <img
+                  src={`https://picsum.photos/seed/${c.id}/200/140`}
+                  alt={c.name}
+                  className="w-full sm:w-[220px] h-[140px] object-cover rounded-lg"
+                />
+                <div className="flex-1">
+                  <h3 className="text-lg font-semibold text-gray-900">{c.name}</h3>
+                  <p className="text-gray-600 mt-1 text-sm">{c.address}</p>
+                  <div className="mt-3 flex flex-wrap gap-2">
+                    <span className="px-3 py-1 rounded-full bg-gray-100 text-gray-700 text-xs">2D</span>
+                    <span className="px-3 py-1 rounded-full bg-gray-100 text-gray-700 text-xs">3D</span>
+                    <span className="px-3 py-1 rounded-full bg-gray-100 text-gray-700 text-xs">IMAX</span>
+                  </div>
+                </div>
+              </div>
             </div>
           ))}
         </div>

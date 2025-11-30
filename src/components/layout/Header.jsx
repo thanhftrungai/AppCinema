@@ -1,12 +1,43 @@
 import React, { useState } from "react";
-import { Film, Search, Menu, X } from "lucide-react";
-import { Link } from "react-router-dom";
+import { Film, Search, Menu, X, User, ChevronDown } from "lucide-react";
+import { Link, useNavigate } from "react-router-dom";
+
+const getAuthStatus = () => {
+  const token = localStorage.getItem("token");
+  const storedUsername = localStorage.getItem("username");
+
+  return {
+    isAuthenticated: !!token,
+    username: storedUsername || "",
+  };
+};
 
 const Header = () => {
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
+  const [isUserMenuOpen, setIsUserMenuOpen] = useState(false);
+  const [isMovieDropdownOpen, setIsMovieDropdownOpen] = useState(false);
+
+  const [{ isAuthenticated, username }, setAuthStatus] =
+    useState(getAuthStatus);
+
+  const navigate = useNavigate();
 
   const toggleMobileMenu = () => {
     setIsMobileMenuOpen(!isMobileMenuOpen);
+  };
+
+  const toggleUserMenu = () => setIsUserMenuOpen((p) => !p);
+  const toggleMovieDropdown = () => setIsMovieDropdownOpen((p) => !p);
+
+  const handleLogout = () => {
+    localStorage.removeItem("token");
+    localStorage.removeItem("authenticated");
+    localStorage.removeItem("username");
+
+    setAuthStatus({ isAuthenticated: false, username: "" });
+
+    setIsUserMenuOpen(false);
+    navigate("/login");
   };
 
   return (
@@ -16,7 +47,9 @@ const Header = () => {
           {/* Logo */}
           <div className="flex items-center gap-2">
             <Film className="w-8 h-8 text-red-500" />
-            <Link to="/" className="text-2xl font-bold">CinemaBooking</Link>
+            <Link to="/" className="text-2xl font-bold">
+              CinemaBooking
+            </Link>
           </div>
 
           {/* Desktop Navigation */}
@@ -24,16 +57,40 @@ const Header = () => {
             <Link to="/" className="hover:text-red-500 transition">
               Trang chủ
             </Link>
-            <Link to="/all" className="hover:text-red-500 transition">
-              Phim
-            </Link>
+            {/* Movie Dropdown */}
+            <div className="relative group">
+              <button
+                onClick={toggleMovieDropdown}
+                className="flex items-center gap-1 hover:text-red-500 transition"
+              >
+                Phim
+                <ChevronDown className="w-4 h-4" />
+              </button>
+              <div className="absolute left-0 mt-0 w-48 bg-gray-800 rounded-lg shadow-lg opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all duration-200">
+                <Link
+                  to="/all"
+                  className="block px-4 py-3 hover:bg-gray-700 hover:text-red-500 transition first:rounded-t-lg"
+                >
+                  Phim đang chiếu
+                </Link>
+                <Link
+                  to="/upcoming"
+                  className="block px-4 py-3 hover:bg-gray-700 hover:text-red-500 transition last:rounded-b-lg border-t border-gray-700"
+                >
+                  Sắp chiếu
+                </Link>
+              </div>
+            </div>
             <Link to="/cinemas" className="hover:text-red-500 transition">
               Rạp
             </Link>
             <Link to="/news" className="hover:text-red-500 transition">
               Tin tức
             </Link>
-            <Link to="/booking-history" className="hover:text-red-500 transition">
+            <Link
+              to="/booking-history"
+              className="hover:text-red-500 transition"
+            >
               Đặt vé
             </Link>
           </nav>
@@ -43,9 +100,39 @@ const Header = () => {
             <button className="p-2 hover:bg-gray-800 rounded-lg transition">
               <Search className="w-5 h-5" />
             </button>
-            <Link to="/login" className="hidden md:block px-4 py-2 bg-red-600 hover:bg-red-700 rounded-lg transition font-medium">
-              Đăng nhập
-            </Link>
+            {isAuthenticated ? (
+              <div className="relative">
+                <button
+                  onClick={toggleUserMenu}
+                  className="hidden md:flex items-center gap-2 px-4 py-2 bg-gray-800 hover:bg-gray-700 rounded-lg transition font-medium"
+                >
+                  <User className="w-4 h-4" />
+                  <span
+                    className="max-w-[160px] truncate"
+                    title={username || "Tài khoản"}
+                  >
+                    {username || "Tài khoản"}
+                  </span>
+                </button>
+                {isUserMenuOpen && (
+                  <div className="absolute right-0 mt-2 w-40 bg-white text-gray-900 rounded-lg shadow-lg overflow-hidden z-50">
+                    <button
+                      onClick={handleLogout}
+                      className="w-full text-left px-4 py-2 hover:bg-gray-100"
+                    >
+                      Đăng xuất
+                    </button>
+                  </div>
+                )}
+              </div>
+            ) : (
+              <Link
+                to="/login"
+                className="hidden md:block px-4 py-2 bg-red-600 hover:bg-red-700 rounded-lg transition font-medium"
+              >
+                Đăng nhập
+              </Link>
+            )}
             <button
               onClick={toggleMobileMenu}
               className="md:hidden p-2 hover:bg-gray-800 rounded-lg"
@@ -70,13 +157,38 @@ const Header = () => {
               >
                 Trang chủ
               </Link>
-              <Link
-                to="/all"
-                className="hover:text-red-500 transition py-2"
-                onClick={toggleMobileMenu}
-              >
-                Phim
-              </Link>
+              {/* Mobile Movie Dropdown */}
+              <div>
+                <button
+                  onClick={toggleMovieDropdown}
+                  className="flex items-center gap-1 w-full hover:text-red-500 transition py-2"
+                >
+                  Phim
+                  <ChevronDown
+                    className={`w-4 h-4 transition ${
+                      isMovieDropdownOpen ? "rotate-180" : ""
+                    }`}
+                  />
+                </button>
+                {isMovieDropdownOpen && (
+                  <div className="pl-4 flex flex-col gap-2 mt-2 border-l border-gray-700">
+                    <Link
+                      to="/all"
+                      className="hover:text-red-500 transition py-1"
+                      onClick={toggleMobileMenu}
+                    >
+                      Phim đang chiếu
+                    </Link>
+                    <Link
+                      to="/upcoming"
+                      className="hover:text-red-500 transition py-1"
+                      onClick={toggleMobileMenu}
+                    >
+                      Sắp chiếu
+                    </Link>
+                  </div>
+                )}
+              </div>
               <Link
                 to="/cinemas"
                 className="hover:text-red-500 transition py-2"
@@ -98,9 +210,25 @@ const Header = () => {
               >
                 Đặt vé
               </Link>
-              <Link to="/login" className="px-4 py-2 bg-red-600 hover:bg-red-700 rounded-lg transition font-medium text-left" onClick={toggleMobileMenu}>
-                Đăng nhập
-              </Link>
+              {isAuthenticated ? (
+                <button
+                  onClick={() => {
+                    toggleMobileMenu();
+                    handleLogout();
+                  }}
+                  className="px-4 py-2 bg-gray-800 hover:bg-gray-700 rounded-lg transition font-medium text-left"
+                >
+                  Đăng xuất
+                </button>
+              ) : (
+                <Link
+                  to="/login"
+                  className="px-4 py-2 bg-red-600 hover:bg-red-700 rounded-lg transition font-medium text-left"
+                  onClick={toggleMobileMenu}
+                >
+                  Đăng nhập
+                </Link>
+              )}
             </div>
           </nav>
         )}

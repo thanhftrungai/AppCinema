@@ -54,6 +54,8 @@ const Login = () => {
         // Thành công: Lưu token vào LocalStorage
         localStorage.setItem("token", data.result.token);
         localStorage.setItem("authenticated", "true"); // Có thể lưu thêm cờ này nếu cần
+        // Lưu tên người dùng để hiển thị trên Header
+        localStorage.setItem("username", data?.result?.username || username);
 
         // Chuyển hướng về trang chủ hoặc trang dashboard
         navigate("/");

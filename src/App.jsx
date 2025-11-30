@@ -8,6 +8,7 @@ import Booking from "./pages/Booking";
 import News from "./pages/News";
 import Cinemas from "./pages/Cinemas";
 import BookingHistory from "./pages/BookingHistory";
+import AllUpcoming from "./pages/AllUpcoming";
 
 function App() {
   return (
@@ -16,7 +17,9 @@ function App() {
         {/* Route "/" sẽ hiển thị Home.jsx */}
         <Route path="/" element={<Home />} />
         <Route path="/all" element={<AllPhim />} />
+        <Route path="/upcoming" element={<AllUpcoming />} />
         <Route path="/movie/:id" element={<CardPhim />} />
+        <Route path="/upcoming" element={<AllUpcoming />} />
         <Route path="/login" element={<Login />} />
         <Route path="/register" element={<Register />} />
         <Route path="/booking" element={<Booking />} />
