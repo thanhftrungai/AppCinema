@@ -1,5 +1,13 @@
-import React, { useState } from "react";
-import { Film, Search, Menu, X, User, ChevronDown } from "lucide-react";
+import React, { useState, useEffect } from "react";
+import {
+  Film,
+  Search,
+  Menu,
+  X,
+  User,
+  ChevronDown,
+  Settings,
+} from "lucide-react";
 import { Link, useNavigate } from "react-router-dom";
 
 const getAuthStatus = () => {
@@ -16,11 +24,20 @@ const Header = () => {
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const [isUserMenuOpen, setIsUserMenuOpen] = useState(false);
   const [isMovieDropdownOpen, setIsMovieDropdownOpen] = useState(false);
-
   const [{ isAuthenticated, username }, setAuthStatus] =
     useState(getAuthStatus);
 
   const navigate = useNavigate();
+
+  // Cập nhật auth status khi component mount hoặc khi localStorage thay đổi
+  useEffect(() => {
+    const handleStorageChange = () => {
+      setAuthStatus(getAuthStatus());
+    };
+
+    window.addEventListener("storage", handleStorageChange);
+    return () => window.removeEventListener("storage", handleStorageChange);
+  }, []);
 
   const toggleMobileMenu = () => {
     setIsMobileMenuOpen(!isMobileMenuOpen);
@@ -33,11 +50,16 @@ const Header = () => {
     localStorage.removeItem("token");
     localStorage.removeItem("authenticated");
     localStorage.removeItem("username");
+    localStorage.removeItem("userRole");
 
     setAuthStatus({ isAuthenticated: false, username: "" });
-
     setIsUserMenuOpen(false);
     navigate("/login");
+  };
+
+  const handleManageClick = () => {
+    setIsUserMenuOpen(false);
+    navigate("/admin/dashboard");
   };
 
   return (
@@ -115,10 +137,17 @@ const Header = () => {
                   </span>
                 </button>
                 {isUserMenuOpen && (
-                  <div className="absolute right-0 mt-2 w-40 bg-white text-gray-900 rounded-lg shadow-lg overflow-hidden z-50">
+                  <div className="absolute right-0 mt-2 w-48 bg-white text-gray-900 rounded-lg shadow-lg overflow-hidden z-50">
+                    <button
+                      onClick={handleManageClick}
+                      className="w-full text-left px-4 py-3 hover:bg-gray-100 flex items-center gap-2 font-medium border-b border-gray-200"
+                    >
+                      <Settings className="w-4 h-4" />
+                      Quản lý
+                    </button>
                     <button
                       onClick={handleLogout}
-                      className="w-full text-left px-4 py-2 hover:bg-gray-100"
+                      className="w-full text-left px-4 py-3 hover:bg-gray-100"
                     >
                       Đăng xuất
                     </button>
@@ -211,15 +240,25 @@ const Header = () => {
                 Đặt vé
               </Link>
               {isAuthenticated ? (
-                <button
-                  onClick={() => {
-                    toggleMobileMenu();
-                    handleLogout();
-                  }}
-                  className="px-4 py-2 bg-gray-800 hover:bg-gray-700 rounded-lg transition font-medium text-left"
-                >
-                  Đăng xuất
-                </button>
+                <>
+                  <Link
+                    to="/admin/dashboard"
+                    className="px-4 py-2 bg-blue-600 hover:bg-blue-700 rounded-lg transition font-medium flex items-center gap-2"
+                    onClick={toggleMobileMenu}
+                  >
+                    <Settings className="w-4 h-4" />
+                    Quản lý
+                  </Link>
+                  <button
+                    onClick={() => {
+                      toggleMobileMenu();
+                      handleLogout();
+                    }}
+                    className="px-4 py-2 bg-gray-800 hover:bg-gray-700 rounded-lg transition font-medium text-left"
+                  >
+                    Đăng xuất
+                  </button>
+                </>
               ) : (
                 <Link
                   to="/login"
