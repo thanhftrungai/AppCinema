@@ -1,32 +1,20 @@
 import React, { useState, useMemo } from "react";
-import { Star, Clock, Calendar, Bell, Search, Filter, Loader2 } from "lucide-react";
+import { Search, Loader2 } from "lucide-react";
 import Header from "../components/layout/Header";
 import Footer from "../components/layout/Footer";
 // 1. Import Context
 import { useMovieContext } from "../context/MovieContext";
+// 2. Import Component Card Chung (Quan trọng)
+import MovieCard from "../components/common/MovieCard";
 
 const AllUpcoming = () => {
-  // 2. Lấy danh sách phim sắp chiếu từ Context
+  // Lấy danh sách phim sắp chiếu từ Context
   const { upcomingMovies, isLoading } = useMovieContext();
 
-  const [notifiedMovies, setNotifiedMovies] = useState(new Set());
   const [searchTerm, setSearchTerm] = useState("");
   const [sortBy, setSortBy] = useState("releaseDate");
 
-  // Logic nút thông báo (Giả lập local)
-  const handleNotify = (movieId) => {
-    setNotifiedMovies((prev) => {
-      const newSet = new Set(prev);
-      if (newSet.has(movieId)) {
-        newSet.delete(movieId);
-      } else {
-        newSet.add(movieId);
-      }
-      return newSet;
-    });
-  };
-
-  // 3. Logic Lọc và Sắp xếp (Cập nhật cho cấu trúc dữ liệu mới)
+  // Logic Lọc và Sắp xếp
   const filteredMovies = useMemo(() => {
     return upcomingMovies
         .filter((movie) => {
@@ -43,7 +31,7 @@ const AllUpcoming = () => {
             return b.rating - a.rating; // Điểm cao xếp trước
           }
           if (sortBy === "releaseDate") {
-            // So sánh ngày tháng (String YYYY-MM-DD so sánh được trực tiếp)
+            // So sánh ngày tháng
             return new Date(a.releaseDate) - new Date(b.releaseDate);
           }
           return 0;
@@ -68,8 +56,7 @@ const AllUpcoming = () => {
                 Đặt Thông Báo Ngay
               </h2>
               <p className="text-gray-300 text-lg max-w-2xl mx-auto">
-                Đừng bỏ lỡ những bộ phim bom tấn sắp ra mắt. Nhấn thông báo để
-                được nhắc nhở khi phim công chiếu!
+                Đừng bỏ lỡ những bộ phim bom tấn sắp ra mắt.
               </p>
             </div>
 
@@ -89,14 +76,23 @@ const AllUpcoming = () => {
                   </div>
                 </div>
 
+                {/* Nút sắp xếp - Đã bỏ style cứng để hiển thị tốt hơn */}
+                <select
+                    value={sortBy}
+                    onChange={(e) => setSortBy(e.target.value)}
+                    className="px-6 py-3 bg-slate-800/80 backdrop-blur-md border border-white/20 rounded-xl text-white focus:outline-none focus:ring-2 focus:ring-purple-500 transition cursor-pointer"
+                >
+                  <option value="releaseDate">Ngày phát hành</option>
+                  <option value="rating">Đánh giá cao nhất</option>
+                </select>
               </div>
             </div>
 
             <div className="text-center mb-6">
               {!isLoading && (
                   <span className="text-gray-300 font-semibold">
-                  {filteredMovies.length} phim sắp chiếu
-               </span>
+                {filteredMovies.length} phim sắp chiếu
+              </span>
               )}
             </div>
           </div>
@@ -113,90 +109,14 @@ const AllUpcoming = () => {
           ) : (
               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
                 {filteredMovies.length > 0 ? (
-                    filteredMovies.map((movie) => {
-                      const isNotified = notifiedMovies.has(movie.id);
-
-                      return (
-                          <div
-                              key={movie.id}
-                              className="group relative rounded-2xl overflow-hidden bg-white/5 backdrop-blur-sm border border-white/10 hover:border-purple-500/50 transition-all duration-500 hover:shadow-2xl hover:shadow-purple-500/20 transform hover:-translate-y-2"
-                          >
-                            {/* Movie Poster */}
-                            <div className="relative h-[400px] overflow-hidden bg-gray-900">
-                              <img
-                                  src={movie.image}
-                                  alt={movie.title}
-                                  className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-110"
-                              />
-
-                              {/* Overlay gradient */}
-                              <div className="absolute inset-0 bg-gradient-to-t from-black via-black/50 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300"></div>
-
-                              {/* Rating Badge */}
-                              {movie.rating > 0 && (
-                                  <div className="absolute top-4 right-4 bg-gradient-to-r from-yellow-400 to-orange-500 text-white px-3 py-1.5 rounded-full font-bold flex items-center gap-1 shadow-xl">
-                                    <Star className="w-4 h-4 fill-current" />
-                                    {movie.rating}
-                                  </div>
-                              )}
-
-                              {/* Coming Soon Badge */}
-                              <div className="absolute top-4 left-4">
-                        <span className="bg-gradient-to-r from-purple-600 to-pink-600 text-white px-4 py-1.5 rounded-full text-sm font-bold shadow-xl animate-pulse">
-                          Sắp Chiếu
-                        </span>
-                              </div>
-
-                              {/* Description on hover */}
-                              <div className="absolute bottom-0 left-0 right-0 p-4 transform translate-y-full group-hover:translate-y-0 transition-transform duration-300">
-                                <p className="text-white text-sm line-clamp-2">
-                                  {movie.description || "Đang cập nhật nội dung..."}
-                                </p>
-                              </div>
-                            </div>
-
-                            {/* Movie Info */}
-                            <div className="p-5">
-                              <h3 className="text-xl font-bold text-white mb-3 line-clamp-2 min-h-[56px] group-hover:text-transparent group-hover:bg-gradient-to-r group-hover:from-purple-400 group-hover:to-pink-400 group-hover:bg-clip-text transition">
-                                {movie.title}
-                              </h3>
-
-                              <div className="space-y-2 text-sm text-gray-400 mb-4">
-                                <div className="flex items-center gap-2">
-                                  <Clock className="w-4 h-4 text-purple-400" />
-                                  <span>{movie.duration}</span>
-                                </div>
-                                <div className="flex items-center gap-2">
-                                  <Calendar className="w-4 h-4 text-purple-400" />
-                                  <span>{movie.releaseDate}</span>
-                                </div>
-                                <div className="flex items-center gap-2">
-                                  <Filter className="w-4 h-4 text-purple-400" />
-                                  {/* Chuyển mảng types thành chuỗi */}
-                                  <span className="line-clamp-1">
-                             {movie.types ? movie.types.join(", ") : "Đang cập nhật"}
-                          </span>
-                                </div>
-                              </div>
-
-                              {/* Notify Button */}
-                              <button
-                                  onClick={() => handleNotify(movie.id)}
-                                  className={`w-full py-3 rounded-xl font-semibold transition-all duration-300 flex items-center justify-center gap-2 shadow-lg transform hover:scale-105 ${
-                                      isNotified
-                                          ? "bg-gradient-to-r from-green-500 to-emerald-600 text-white"
-                                          : "bg-gradient-to-r from-purple-600 to-pink-600 text-white hover:from-purple-700 hover:to-pink-700"
-                                  }`}
-                              >
-                                <Bell
-                                    className={`w-5 h-5 ${isNotified ? "fill-current" : ""}`}
-                                />
-                                {isNotified ? "Đã Bật Thông Báo ✓" : "Bật Thông Báo"}
-                              </button>
-                            </div>
-                          </div>
-                      );
-                    })
+                    filteredMovies.map((movie) => (
+                        // ✅ SỬ DỤNG COMPONENT CHUNG - Gọn gàng & Không lỗi
+                        <MovieCard
+                            key={movie.id}
+                            movie={movie}
+                            isUpcoming={true}
+                        />
+                    ))
                 ) : (
                     // Empty State
                     <div className="col-span-full text-center py-16">
