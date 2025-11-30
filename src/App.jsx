@@ -1,4 +1,4 @@
-import { BrowserRouter, Routes, Route } from "react-router-dom";
+import { Routes, Route } from "react-router-dom"; // ❌ Bỏ import BrowserRouter
 import Home from "./pages/Home";
 import Login from "./components/auth/Login";
 import Register from "./components/auth/Register";
@@ -12,14 +12,15 @@ import AllUpcoming from "./pages/AllUpcoming";
 
 function App() {
   return (
-    <BrowserRouter>
+      // ❌ ĐÃ XÓA <BrowserRouter> ở đây vì main.jsx đã có rồi
       <Routes>
-        {/* Route "/" sẽ hiển thị Home.jsx */}
         <Route path="/" element={<Home />} />
         <Route path="/all" element={<AllPhim />} />
         <Route path="/upcoming" element={<AllUpcoming />} />
         <Route path="/movie/:id" element={<CardPhim />} />
-        <Route path="/upcoming" element={<AllUpcoming />} />
+
+        {/* Đã xóa dòng duplicate /upcoming ở đây */}
+
         <Route path="/login" element={<Login />} />
         <Route path="/register" element={<Register />} />
         <Route path="/booking" element={<Booking />} />
@@ -27,7 +28,6 @@ function App() {
         <Route path="/cinemas" element={<Cinemas />} />
         <Route path="/booking-history" element={<BookingHistory />} />
       </Routes>
-    </BrowserRouter>
   );
 }
 

@@ -3,8 +3,19 @@ import { createRoot } from 'react-dom/client'
 import './index.css'
 import App from './App.jsx'
 
+// 1. Import Router (để chuyển trang)
+import { BrowserRouter } from 'react-router-dom'
+
+// 2. Import Kho chứa phim (Context) vừa tạo
+import { MovieProvider } from './context/MovieContext.jsx'
+
 createRoot(document.getElementById('root')).render(
-  <StrictMode>
-    <App />
-  </StrictMode>,
+    <StrictMode>
+        <BrowserRouter>
+            {/* 3. Bọc App bên trong MovieProvider */}
+            <MovieProvider>
+                <App />
+            </MovieProvider>
+        </BrowserRouter>
+    </StrictMode>,
 )
