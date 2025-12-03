@@ -7,6 +7,7 @@ import {
   Settings,
   X,
   LogOut,
+  Building2,
 } from "lucide-react";
 
 export const AdminSidebar = ({
@@ -19,6 +20,7 @@ export const AdminSidebar = ({
     { id: "dashboard", icon: LayoutDashboard, label: "Dashboard" },
     { id: "movies", icon: Film, label: "Quản lý Phim" },
     { id: "cinemas", icon: Settings, label: "Quản lý Rạp" },
+    { id: "rooms", icon: Building2, label: "Quản lý Phòng chiếu" },
     { id: "showtimes", icon: Calendar, label: "Quản lý Suất chiếu" },
     { id: "bookings", icon: Calendar, label: "Quản lý Đặt vé" },
     { id: "users", icon: Users, label: "Quản lý Users" },

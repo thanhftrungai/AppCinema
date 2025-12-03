@@ -9,6 +9,7 @@ import { ManageCinemas } from "./ManageCinemas";
 import { ManageShowtimes } from "./ManageShowtimes";
 import { ManageBookings } from "./ManageBookings";
 import { ManageUsers } from "./ManageUsers";
+import { ManageScreeningRooms } from "./ManageScreeningRooms";
 
 export const AdminLayout = () => {
   const [activeMenu, setActiveMenu] = useState("dashboard");
@@ -29,6 +30,8 @@ export const AdminLayout = () => {
         return <ManageBookings />;
       case "users":
         return <ManageUsers />;
+      case "rooms":
+        return <ManageScreeningRooms />;
       default:
         return <AdminDashboard />;
     }
