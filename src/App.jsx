@@ -9,10 +9,22 @@ import News from "./pages/News";
 import Cinemas from "./pages/Cinemas";
 import BookingHistory from "./pages/BookingHistory";
 import AllUpcoming from "./pages/AllUpcoming";
-import { AdminLayout } from "./admin/AdminLayout"; // Import AdminLayout mới
+import Account from "./pages/Account"; // Import Account page
+import { AdminLayout } from "./admin/AdminLayout";
 
 // Component bảo vệ route admin - chỉ kiểm tra đăng nhập
 const ProtectedAdminRoute = ({ children }) => {
+  const isAuthenticated = localStorage.getItem("token");
+
+  if (!isAuthenticated) {
+    return <Navigate to="/login" replace />;
+  }
+
+  return children;
+};
+
+// Component bảo vệ route yêu cầu đăng nhập
+const ProtectedRoute = ({ children }) => {
   const isAuthenticated = localStorage.getItem("token");
 
   if (!isAuthenticated) {
@@ -35,14 +47,30 @@ function App() {
       <Route path="/booking" element={<Booking />} />
       <Route path="/news" element={<News />} />
       <Route path="/cinemas" element={<Cinemas />} />
-      <Route path="/booking-history" element={<BookingHistory />} />
+
+      {/* Protected User Routes */}
+      <Route
+        path="/booking-history"
+        element={
+          <ProtectedRoute>
+            <BookingHistory />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/account"
+        element={
+          <ProtectedRoute>
+            <Account />
+          </ProtectedRoute>
+        }
+      />
 
       {/* Admin Routes */}
       <Route
         path="/admin/dashboard"
         element={
           <ProtectedAdminRoute>
-            {/* Sử dụng AdminLayout thay vì ManageUsers */}
             <AdminLayout />
           </ProtectedAdminRoute>
         }

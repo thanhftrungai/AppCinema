@@ -246,6 +246,15 @@ const Header = () => {
                       )}
                     </div>
 
+                    <Link
+                      to="/account"
+                      onClick={() => setIsUserMenuOpen(false)}
+                      className="w-full text-left px-4 py-3 hover:bg-gray-50 flex items-center gap-3 font-medium border-b border-gray-200 text-gray-700 transition-colors"
+                    >
+                      <User className="w-4 h-4" />
+                      <span>Tài khoản</span>
+                    </Link>
+
                     {role === "ADMIN" && (
                       <button
                         onClick={handleManageClick}
