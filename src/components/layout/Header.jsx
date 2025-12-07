@@ -189,15 +189,6 @@ const Header = () => {
             >
               Tin tức
             </Link>
-            <Link
-              to="/booking-history"
-              className={`flex items-center gap-1 px-4 py-2 rounded-lg hover:bg-white/10 transition-all duration-300 font-medium hover:text-red-400 ${
-                isScrolled ? "text-sm" : ""
-              }`}
-            >
-              <History className="w-4 h-4" />
-              Lịch sử
-            </Link>
           </nav>
 
           {/* Right Side */}
@@ -253,6 +244,15 @@ const Header = () => {
                     >
                       <User className="w-4 h-4" />
                       <span>Tài khoản</span>
+                    </Link>
+
+                    <Link
+                      to="/booking-history"
+                      onClick={() => setIsUserMenuOpen(false)}
+                      className="w-full text-left px-4 py-3 hover:bg-gray-50 flex items-center gap-3 font-medium border-b border-gray-200 text-gray-700 transition-colors"
+                    >
+                      <History className="w-4 h-4" />
+                      <span>Lịch sử đặt vé</span>
                     </Link>
 
                     {role === "ADMIN" && (
@@ -357,16 +357,18 @@ const Header = () => {
               >
                 📰 Tin tức
               </Link>
-              <Link
-                to="/booking-history"
-                className="hover:bg-white/10 rounded-lg transition py-3 px-4 font-medium hover:text-red-400"
-                onClick={toggleMobileMenu}
-              >
-                📋 Lịch sử đặt vé
-              </Link>
 
               {isAuthenticated ? (
                 <div className="mt-2 pt-3 border-t border-gray-700 space-y-2">
+                  <Link
+                    to="/booking-history"
+                    className="flex items-center gap-2 px-4 py-3 bg-gradient-to-r from-purple-600 to-purple-700 hover:from-purple-700 hover:to-purple-800 rounded-lg transition font-medium shadow-lg"
+                    onClick={toggleMobileMenu}
+                  >
+                    <History className="w-4 h-4" />
+                    Lịch sử đặt vé
+                  </Link>
+
                   {role === "ADMIN" && (
                     <Link
                       to="/admin/dashboard"

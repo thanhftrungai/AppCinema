@@ -3,15 +3,7 @@ import React, { useMemo } from "react";
 import { useParams, Link } from "react-router-dom";
 import Header from "../components/layout/Header";
 import Footer from "../components/layout/Footer";
-import {
-  Star,
-  Clock,
-  Calendar,
-  ArrowLeft,
-  Tag,
-  Loader2,
-  PlayCircle,
-} from "lucide-react";
+import { Star, Clock, Calendar, ArrowLeft, Tag, Loader2 } from "lucide-react";
 // 1. Import Context để lấy dữ liệu có sẵn
 import { useMovieContext } from "../context/MovieContext";
 
@@ -160,28 +152,38 @@ const CardPhim = () => {
                 </div>
               )}
 
-              {/* Nút Đặt vé & Trailer */}
-              <div className="flex flex-col sm:flex-row gap-4 mt-4">
+              {/* Nút Đặt vé */}
+              <div className="mt-4">
                 <Link
                   // Truyền ID sang trang Booking giống logic bạn đã làm
                   to={`/booking?movieId=${movie.id}`}
-                  className="px-8 py-3.5 bg-gradient-to-r from-red-600 to-red-700 hover:from-red-700 hover:to-red-800 text-white rounded-xl font-bold shadow-lg shadow-red-200 transition-all transform hover:-translate-y-0.5 text-center"
+                  className="inline-block px-8 py-3.5 bg-gradient-to-r from-red-600 to-red-700 hover:from-red-700 hover:to-red-800 text-white rounded-xl font-bold shadow-lg shadow-red-200 transition-all transform hover:-translate-y-0.5 text-center"
                 >
                   Đặt vé ngay
                 </Link>
-
-                {movie.trailer && (
-                  <a
-                    href={movie.trailer}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="px-8 py-3.5 border-2 border-gray-200 hover:border-gray-300 hover:bg-gray-50 text-gray-700 rounded-xl font-bold transition-all flex items-center justify-center gap-2"
-                  >
-                    <PlayCircle className="w-5 h-5" />
-                    Xem Trailer
-                  </a>
-                )}
               </div>
+
+              {/* Trailer Video */}
+              {movie.trailer && (
+                <div className="mt-8">
+                  <h3 className="text-lg font-bold text-gray-900 mb-4">
+                    Trailer
+                  </h3>
+                  <div
+                    className="relative w-full rounded-xl overflow-hidden shadow-lg"
+                    style={{ paddingBottom: "56.25%" }}
+                  >
+                    <iframe
+                      className="absolute top-0 left-0 w-full h-full"
+                      src={movie.trailer.replace("watch?v=", "embed/")}
+                      title="Movie Trailer"
+                      frameBorder="0"
+                      allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+                      allowFullScreen
+                    />
+                  </div>
+                </div>
+              )}
             </div>
           </div>
         </div>
