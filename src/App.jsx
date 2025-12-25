@@ -9,8 +9,11 @@ import News from "./pages/News";
 import Cinemas from "./pages/Cinemas";
 import BookingHistory from "./pages/BookingHistory";
 import AllUpcoming from "./pages/AllUpcoming";
-import Account from "./pages/Account"; // Import Account page
+import Account from "./pages/Account";
 import { AdminLayout } from "./admin/AdminLayout";
+
+// 1. IMPORT USER PROVIDER
+import { UserProvider } from "./context/UserContext"; // Hãy chắc chắn đường dẫn đúng folder context của bạn
 
 // Component bảo vệ route admin - chỉ kiểm tra đăng nhập
 const ProtectedAdminRoute = ({ children }) => {
@@ -66,12 +69,15 @@ function App() {
         }
       />
 
-      {/* Admin Routes */}
+      {/* 2. ADMIN ROUTES - ĐƯỢC BỌC BỞI USER PROVIDER */}
       <Route
         path="/admin/dashboard"
         element={
           <ProtectedAdminRoute>
-            <AdminLayout />
+            {/* UserProvider chỉ hoạt động trong khu vực Admin */}
+            <UserProvider>
+              <AdminLayout />
+            </UserProvider>
           </ProtectedAdminRoute>
         }
       />
