@@ -8,11 +8,11 @@ export default defineConfig({
   // THÊM ĐOẠN NÀY VÀO:
   server: {
     proxy: {
-      '/cinema': {
-        target: 'https://cinema-web-mme8.onrender.com',
+      "/cinema": {
+        target: "https://cinema-web-mme8.onrender.com",
         changeOrigin: true,
         secure: false,
       },
     },
   },
-})
+});

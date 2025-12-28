@@ -92,7 +92,6 @@ const AllPhim = () => {
             {filteredMovies.length > 0 ? (
               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
                 {filteredMovies.map((movie) => (
-                  // ✅ THAY THẾ TOÀN BỘ ĐOẠN DIV DÀI NGOẰNG BẰNG 1 DÒNG NÀY:
                   <MovieCard key={movie.id} movie={movie} />
                 ))}
               </div>
