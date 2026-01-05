@@ -1,0 +1,9 @@
+com\example\chat\dto\SendMessageRequest.class
+com\example\chat\config\WebSocketConfig.class
+com\example\chat\dto\ConversationSummary.class
+com\example\chat\web\ChatController.class
+com\example\chat\FakeChatApplication.class
+com\example\chat\service\ChatStore.class
+com\example\chat\web\ChatController$ChatRestController.class
+com\example\chat\model\ChatMessage.class
+com\example\chat\config\WebConfig.class
