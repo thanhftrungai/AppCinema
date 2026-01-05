@@ -7,27 +7,25 @@ import { FaXTwitter } from "react-icons/fa6";
 import logo from "../../assets/images/logo.png";
 import googleIcon from "../../assets/images/google-icon.png";
 import wallpaper from "../../assets/images/wallpaper.png";
-import { Link, useNavigate } from "react-router-dom"; // Thêm useNavigate
+import { Link, useNavigate } from "react-router-dom";
 
 const Login = () => {
   const [showPassword, setShowPassword] = useState(false);
 
-  // 1. Thêm state quản lý dữ liệu nhập vào
+  // State quản lý dữ liệu nhập
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState("");
 
-  const navigate = useNavigate(); // Hook để chuyển trang
+  const navigate = useNavigate();
 
   const togglePasswordView = () => setShowPassword(!showPassword);
 
-  // 2. Hàm xử lý đăng nhập
+  // --- HÀM XỬ LÝ ĐĂNG NHẬP ---
   const handleLogin = async () => {
-    // Reset lỗi cũ
     setError("");
 
-    // Kiểm tra dữ liệu trống
     if (!username || !password) {
       setError("Vui lòng nhập đầy đủ thông tin!");
       return;
@@ -36,31 +34,63 @@ const Login = () => {
     setIsLoading(true);
 
     try {
+      // BƯỚC 1: LẤY TOKEN
+      // Dùng đường dẫn tương đối để đi qua Vite Proxy (tránh CORS)
       const response = await fetch("/cinema/auth/token", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
         },
         body: JSON.stringify({
-          username: username, // API yêu cầu field tên là username
+          username: username,
           password: password,
         }),
       });
 
       const data = await response.json();
 
-      // 3. Xử lý kết quả trả về
       if (data.code === 0) {
-        // Thành công: Lưu token vào LocalStorage
-        localStorage.setItem("token", data.result.token);
-        localStorage.setItem("authenticated", "true"); // Có thể lưu thêm cờ này nếu cần
-        // Lưu tên người dùng để hiển thị trên Header
-        localStorage.setItem("username", data?.result?.username || username);
+        // --- ĐĂNG NHẬP THÀNH CÔNG ---
+        const token = data.result.token;
 
-        // Chuyển hướng về trang chủ hoặc trang dashboard
+        // 1. Lưu Token
+        localStorage.setItem("token", token);
+        localStorage.setItem("authenticated", "true");
+
+        // BƯỚC 2: GỌI API LẤY THÔNG TIN USER
+        // 👇 Quan trọng: Dùng "/cinema/..." thay vì "https://..." để khớp với vite.config.js
+        try {
+          const infoResponse = await fetch("/cinema/users/myInfo", {
+            method: "GET",
+            headers: {
+              "Authorization": `Bearer ${token}`, // Gửi kèm Token xác thực
+              "Content-Type": "application/json"
+            }
+          });
+
+          if (infoResponse.ok) {
+            const infoData = await infoResponse.json();
+
+            // Lấy object user (xử lý trường hợp API bọc trong .result)
+            const userFullInfo = infoData.result || infoData;
+
+            // 2. Lưu thông tin User vào LocalStorage
+            // Trang Booking.jsx sẽ đọc dữ liệu từ đây
+            localStorage.setItem("user", JSON.stringify(userFullInfo));
+
+            console.log("✅ Đã lưu User Info:", userFullInfo);
+          } else {
+            console.warn("⚠️ Có Token nhưng không lấy được User Info");
+          }
+        } catch (infoError) {
+          console.error("❌ Lỗi mạng khi gọi myInfo:", infoError);
+        }
+
+        // BƯỚC 3: CHUYỂN HƯỚNG VỀ TRANG CHỦ
         navigate("/");
+
       } else {
-        // Thất bại: API trả về code khác 0 (ví dụ sai pass)
+        // Xử lý khi sai mật khẩu hoặc lỗi từ server trả về
         setError("Đăng nhập thất bại. Vui lòng kiểm tra lại!");
       }
     } catch (err) {
@@ -80,7 +110,7 @@ const Login = () => {
             backgroundPosition: "center",
           }}
       >
-        {/* Decorative glows */}
+        {/* Hiệu ứng nền */}
         <div className="pointer-events-none absolute -top-24 -left-24 w-96 h-96 bg-red-600/30 blur-3xl rounded-full" />
         <div className="pointer-events-none absolute -bottom-24 -right-24 w-96 h-96 bg-indigo-600/30 blur-3xl rounded-full" />
 
@@ -111,12 +141,12 @@ const Login = () => {
           )}
 
           <div className="w-full flex flex-col gap-3 mt-2">
-            {/* Input Email/Username */}
+            {/* Input Username */}
             <div className="w-full flex items-center gap-2 bg-gray-800/80 p-3 rounded-xl border border-white/10 focus-within:border-blue-500 transition">
               <MdAlternateEmail />
               <input
-                  type="text" // Đổi thành text để nhập username linh hoạt hơn
-                  placeholder="Username or Email"
+                  type="text"
+                  placeholder="Username"
                   className="bg-transparent border-0 w-full outline-none text-sm md:text-base placeholder-gray-400"
                   value={username}
                   onChange={(e) => setUsername(e.target.value)}

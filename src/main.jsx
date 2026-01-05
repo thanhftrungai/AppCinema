@@ -11,7 +11,8 @@ import { MovieProvider } from './context/MovieContext.jsx'
 import { CinemaProvider } from './context/CinemaContext.jsx'
 import { RoomProvider } from './context/RoomContext.jsx';
 import { ShowtimeProvider } from './context/ShowtimeContext.jsx'; // Thêm dòng này
-
+import { SeatProvider } from "./context/SeatContext";
+import { ComboProvider } from "./context/ComboContext";
 createRoot(document.getElementById('root')).render(
     <StrictMode>
         <BrowserRouter>
@@ -20,7 +21,11 @@ createRoot(document.getElementById('root')).render(
                 <CinemaProvider>
                     <RoomProvider>
                         <ShowtimeProvider> {/* Bọc ShowtimeProvider vào trong cùng */}
-                            <App />
+                            <SeatProvider>
+                                <ComboProvider>
+                                    <App />
+                                </ComboProvider>
+                            </SeatProvider>
                         </ShowtimeProvider>
                     </RoomProvider>
                 </CinemaProvider>

@@ -1,91 +1,68 @@
 /* eslint-disable react-refresh/only-export-components */
-import React, { createContext, useState, useContext } from "react";
+import React, { createContext, useState, useContext, useCallback } from "react";
+import { request } from "../utils/request";
 
 const TicketContext = createContext();
 
-// [QUAN TRỌNG] Thêm tiền tố /cinema
-const API_BASE = "/cinema";
+export const useTicketContext = () => useContext(TicketContext);
 
 export const TicketProvider = ({ children }) => {
+  const [tickets, setTickets] = useState([]);
   const [isLoading, setIsLoading] = useState(false);
 
-  const getAuthHeaders = () => {
-    const token = localStorage.getItem("token");
-    return {
-      "Content-Type": "application/json",
-      Authorization: token ? `Bearer ${token}` : "",
-    };
-  };
-
-  const handleResponse = async (response) => {
-    const text = await response.text();
-    try {
-      const data = text ? JSON.parse(text) : {};
-      if (
-        !response.ok ||
-        (data.code !== undefined && data.code !== 0 && data.code !== 1000)
-      ) {
-        throw new Error(data.message || "Lỗi thao tác API");
-      }
-      return data.result || data;
-    } catch (err) {
-      throw new Error("Lỗi kết nối Server");
-    }
-  };
-
-  // 1. POST: Tạo vé mới
-  const createTicket = async (ticketData) => {
-    const response = await fetch(`${API_BASE}/tickets`, {
+  // 1. TẠO VÉ LẺ (Quan trọng: Wrapped useCallback)
+  const createSingleTicket = useCallback(async (ticketData) => {
+    const response = await request("/cinema/tickets", {
       method: "POST",
-      headers: getAuthHeaders(),
-      body: JSON.stringify(ticketData),
+      body: JSON.stringify(ticketData)
     });
-    return await handleResponse(response);
-  };
 
-  // 2. GET: Lấy vé theo Suất Chiếu
-  const getTicketsByShowtime = async (showtimeId) => {
-    setIsLoading(true);
-    try {
-      const response = await fetch(
-        `${API_BASE}/tickets/showtime/${showtimeId}`,
-        {
-          method: "GET",
-          headers: { "Content-Type": "application/json" },
-        }
-      );
-      // Với API public, đôi khi backend trả lỗi nếu ko có token,
-      // nhưng ở đây ta cứ parse bình thường
-      return await handleResponse(response);
-    } catch (error) {
-      console.error("Lỗi lấy vé theo suất chiếu:", error);
-      return [];
-    } finally {
-      setIsLoading(false);
+    if (!response.ok) throw new Error("Lỗi kết nối API tạo vé");
+
+    const data = await response.json();
+    if (data.code !== 0 && data.code !== 1000) {
+      throw new Error(data.message || "Tạo vé thất bại");
     }
-  };
 
-  // 3. GET: Lấy vé theo Hóa đơn
-  const getTicketsByBill = async (billId) => {
-    const response = await fetch(`${API_BASE}/tickets/bill/${billId}`, {
-      method: "GET",
-      headers: getAuthHeaders(),
+    return data.result; // Trả về object ticket
+  }, []);
+
+  // 2. XÓA VÉ LẺ
+  const deleteTicket = useCallback(async (ticketId) => {
+    const response = await request(`/cinema/tickets/${ticketId}`, {
+      method: "DELETE"
     });
-    return await handleResponse(response);
-  };
+    if (!response.ok) {
+      console.warn("API xóa vé báo lỗi, nhưng UI vẫn sẽ cập nhật");
+      return null;
+    }
+    return await response.json();
+  }, []);
+
+  // 3. LẤY VÉ ĐÃ BÁN
+  const getTicketsByShowtime = useCallback(async (showtimeId) => {
+    try {
+      const response = await request(`/cinema/tickets/showtime/${showtimeId}`, {
+        method: "GET"
+      });
+      if (!response.ok) return [];
+      const data = await response.json();
+      return data.result || [];
+    } catch (error) {
+      console.error("Lỗi lấy vé đã bán:", error);
+      return [];
+    }
+  }, []);
 
   return (
-    <TicketContext.Provider
-      value={{
+      <TicketContext.Provider value={{
+        tickets,
         isLoading,
-        createTicket,
-        getTicketsByShowtime,
-        getTicketsByBill,
-      }}
-    >
-      {children}
-    </TicketContext.Provider>
+        createSingleTicket,
+        deleteTicket,
+        getTicketsByShowtime
+      }}>
+        {children}
+      </TicketContext.Provider>
   );
 };
-
-export const useTicketContext = () => useContext(TicketContext);

@@ -1,400 +1,412 @@
-import React, { useMemo, useState } from "react";
-// Thêm useLocation để lắng nghe URL thay đổi
-import { useLocation } from "react-router-dom";
+import React, { useMemo, useState, useEffect, useRef } from "react";
+import { useLocation, useNavigate } from "react-router-dom";
 import Header from "../components/layout/Header";
 import Footer from "../components/layout/Footer";
-import { Loader2 } from "lucide-react";
-// 1. Import Context
+import { Loader2, ChevronDown, ChevronUp, MapPin, Lock, ArrowRight } from "lucide-react";
+
+// Import các Context (Giữ nguyên)
 import { useMovieContext } from "../context/MovieContext";
-
-// --- DỮ LIỆU TĨNH (RẠP, GIỜ CHIẾU...) ---
-const cinemas = [
-  { id: "cgv-times", name: "CGV Times City", address: "458 Minh Khai, Hà Nội" },
-  { id: "bhd-vincom", name: "BHD Star Vincom", address: "54 Nguyễn Chí Thanh, Hà Nội" },
-  { id: "galaxy-ngu-quyen", name: "Galaxy Nguyễn Du", address: "116 Nguyễn Du, TP.HCM" },
-  { id: "lotte-go-vap", name: "Lotte Gò Vấp", address: "242 Nguyễn Văn Lượng, TP.HCM" },
-];
-
-const times = ["10:00", "12:30", "15:00", "17:30", "20:00", "22:15"];
-
-function useNextDays(n = 7) {
-  return useMemo(() => {
-    const arr = [];
-    const now = new Date();
-    for (let i = 0; i < n; i++) {
-      const d = new Date(now);
-      d.setDate(d.getDate() + i);
-      arr.push({
-        key: d.toISOString().slice(0, 10),
-        label: d.toLocaleDateString("vi-VN", {
-          weekday: "short",
-          day: "2-digit",
-          month: "2-digit",
-        }),
-      });
-    }
-    return arr;
-  }, [n]);
-}
+import { useShowtimeContext } from "../context/ShowtimeContext";
+import { useCinemaContext } from "../context/CinemaContext";
+import { useSeatContext } from "../context/SeatContext";
+import { useBillContext } from "../context/BillContext";
+import { useTicketContext } from "../context/TicketContext";
 
 const pricePerSeat = 75000;
+function formatVND(v) { return v.toLocaleString("vi-VN") + " đ"; }
+const getCinemaId = (c) => c.cinemaId || c.id || c._id;
+const getNext7Days = () => {
+  const days = []; const today = new Date();
+  for (let i = 0; i < 7; i++) {
+    const d = new Date(today); d.setDate(today.getDate() + i);
+    days.push(d.toLocaleDateString('en-CA'));
+  }
+  return days;
+};
 
-function formatVND(v) {
-  return v.toLocaleString("vi-VN") + " đ";
-}
-
-// --- COMPONENT SEAT MAP ---
-function SeatMap({ selected, onToggle, disabled = [] }) {
-  const rows = ["A", "B", "C", "D", "E", "F", "G"];
-  const cols = Array.from({ length: 10 }, (_, i) => i + 1);
-  const isDisabled = (code) => disabled.includes(code);
-  const isSelected = (code) => selected.includes(code);
+// --- SEAT MAP COMPONENT (Giữ nguyên không đổi) ---
+function SeatMap({ seatDataFromDB, selectedIds, bookedSeatIds = [], onToggle, isDisabled }) {
+  const rows = ["A", "B", "C", "D", "E", "F", "G", "H"];
+  const cols = Array.from({ length: 17 }, (_, i) => i + 1);
 
   return (
-      <div>
-        <div className="bg-gray-800 text-white text-center py-2 rounded mb-4">
-          Màn hình
-        </div>
-        <div
-            className="grid gap-2"
-            style={{ gridTemplateColumns: "repeat(11, minmax(0, 1fr))" }}
-        >
-          <div></div>
-          {cols.map((c) => (
-              <div key={`head-${c}`} className="text-center text-sm text-gray-600">
-                {c}
-              </div>
-          ))}
-          {rows.map((r) => (
-              <React.Fragment key={r}>
-                <div className="flex items-center justify-center text-sm font-semibold text-gray-700">
-                  {r}
-                </div>
-                {cols.map((c) => {
-                  const code = `${r}${c}`;
-                  const disabledSeat = isDisabled(code);
-                  const active = isSelected(code);
-                  return (
-                      <button
-                          key={code}
-                          disabled={disabledSeat}
-                          onClick={() => onToggle(code)}
-                          className={`h-9 rounded flex items-center justify-center text-xs font-medium border transition ${
-                              disabledSeat
-                                  ? "bg-gray-200 text-gray-400 cursor-not-allowed border-gray-200"
-                                  : active
-                                      ? "bg-red-600 text-white border-red-600"
-                                      : "bg-white hover:bg-gray-50 text-gray-700 border-gray-300"
-                          }`}
-                      >
-                        {code}
-                      </button>
-                  );
-                })}
-              </React.Fragment>
-          ))}
-        </div>
+      <div className={`overflow-x-auto pb-4 ${isDisabled ? "opacity-60 pointer-events-none" : ""}`}>
+        <div className="min-w-[800px]">
+          <div className="bg-gray-800 text-white text-center py-2 rounded mb-8 shadow-lg w-3/4 mx-auto">Màn hình</div>
+          <div className="grid gap-y-3 gap-x-1" style={{ gridTemplateColumns: "30px repeat(17, minmax(0, 1fr))" }}>
+            <div></div>
+            {cols.map((c) => (<div key={`head-${c}`} className="text-center text-xs font-bold text-gray-400">{c}</div>))}
 
-        <div className="flex items-center gap-4 mt-4 text-sm">
-          <div className="flex items-center gap-2">
-            <span className="w-4 h-4 rounded bg-white border border-gray-300 inline-block"></span>{" "}
-            Trống
-          </div>
-          <div className="flex items-center gap-2">
-            <span className="w-4 h-4 rounded bg-red-600 inline-block"></span> Đang
-            chọn
-          </div>
-          <div className="flex items-center gap-2">
-            <span className="w-4 h-4 rounded bg-gray-200 inline-block"></span> Đã
-            đặt
+            {rows.map((rLabel, rIndex) => (
+                <React.Fragment key={rLabel}>
+                  <div className="flex items-center justify-center font-bold text-gray-600">{rLabel}</div>
+                  {cols.map((cNum, cIndex) => {
+                    const flatIndex = (rIndex * 17) + cIndex;
+                    const seatInfo = seatDataFromDB[flatIndex];
+                    if (!seatInfo) return <div key={`${rLabel}-${cNum}`} className="bg-transparent"></div>;
+
+                    const currentSeatId = seatInfo.seatId;
+                    const isSold = Array.isArray(bookedSeatIds) && bookedSeatIds.includes(currentSeatId);
+                    const isUnavailable = seatInfo.seatStatus !== "Trống";
+                    const isBooked = isSold || isUnavailable;
+                    const isSelected = selectedIds.includes(currentSeatId);
+
+                    return (
+                        <button key={currentSeatId} type="button" disabled={isBooked}
+                                onClick={() => onToggle(currentSeatId, rLabel + cNum)}
+                                className={`h-8 w-full rounded-t-md text-[10px] font-bold border-b-2 flex items-center justify-center transition-all duration-150 ${
+                                    isBooked ? "bg-gray-400 border-gray-500 text-white cursor-not-allowed"
+                                        : isSelected ? "bg-red-600 border-red-800 text-white -translate-y-1 shadow-md"
+                                            : "bg-white border-gray-300 text-gray-600 hover:-translate-y-1 hover:border-red-400"
+                                }`}
+                        >
+                          {isBooked ? <Lock className="w-3 h-3" /> : `${rLabel}${cNum}`}
+                        </button>
+                    );
+                  })}
+                </React.Fragment>
+            ))}
           </div>
         </div>
       </div>
   );
 }
 
-// --- MAIN BOOKING COMPONENT ---
+// --- MAIN COMPONENT ---
 const Booking = () => {
-  // 1. Lấy dữ liệu từ Context
-  const { movies, isLoading } = useMovieContext();
-  const location = useLocation(); // Hook để lấy URL hiện tại
+  const navigate = useNavigate();
+  const location = useLocation();
 
-  const days = useNextDays(7);
+  // Contexts
+  const { movies } = useMovieContext();
+  const { showtimes, fetchShowtimes } = useShowtimeContext();
+  const { cinemas } = useCinemaContext();
+  const { seats: dbSeats, fetchSeatsByRoom, resetSeatState } = useSeatContext();
+  const { createBill, currentBill, clearCurrentBill } = useBillContext();
+  const { createSingleTicket, deleteTicket, getTicketsByShowtime } = useTicketContext();
 
-  // 2. Logic lấy phim từ URL (SỬ DỤNG USEMEMO ĐỂ TRÁNH LỖI ESLINT)
+  // UI States
+  const [selectedCinemaId, setSelectedCinemaId] = useState("");
+  const [selectedDate, setSelectedDate] = useState("");
+  const [selectedShowtimeId, setSelectedShowtimeId] = useState("");
+  const [isCinemaDropdownOpen, setIsCinemaDropdownOpen] = useState(false);
+  const dropdownRef = useRef(null);
+
+  // Booking States
+  const [selectedSeatIds, setSelectedSeatIds] = useState([]);
+  const [selectedSeatNames, setSelectedSeatNames] = useState([]);
+  const [bookedSeatIds, setBookedSeatIds] = useState([]);
+
+  // Queue & Refs
+  const seatTicketMapRef = useRef({});
+  const pendingQueue = useRef([]);
+  const isProcessingQueue = useRef(false);
+  const [isInitializingBill, setIsInitializingBill] = useState(false);
+
+  // --- 👇 [LOGIC MỚI] USER & AUTHENTICATION 👇 ---
+  const [currentUser, setCurrentUser] = useState(null);
+  const [authLoading, setAuthLoading] = useState(true); // Trạng thái đang check user
+
+  useEffect(() => {
+    const fetchUserInfo = async () => {
+      const token = localStorage.getItem("token");
+      const savedUser = localStorage.getItem("user");
+
+      // 1. Nếu đã có trong LocalStorage thì dùng luôn
+      if (savedUser) {
+        setCurrentUser(JSON.parse(savedUser));
+        setAuthLoading(false);
+        return;
+      }
+
+      // 2. Nếu chưa có User nhưng có Token -> Gọi API lấy Info
+      if (token) {
+        try {
+          const response = await fetch("https://cinema-web-mme8.onrender.com/cinema/users/myInfo", {
+            method: "GET",
+            headers: {
+              "Authorization": `Bearer ${token}`,
+              "Content-Type": "application/json"
+            }
+          });
+
+          if (response.ok) {
+            const data = await response.json();
+            // Data trả về là object user: { userId: 1, username: "admin", ... }
+            // Hoặc nếu nó bọc trong result thì dùng data.result
+            const userData = data.result || data;
+
+            console.log("Fetched User Info:", userData); // Debug
+
+            // Lưu lại để lần sau đỡ phải gọi API
+            localStorage.setItem("user", JSON.stringify(userData));
+            setCurrentUser(userData);
+          } else {
+            console.error("Token hết hạn hoặc không hợp lệ");
+            // localStorage.removeItem("token"); // Tùy chọn: xóa token nếu lỗi
+          }
+        } catch (error) {
+          console.error("Lỗi khi lấy thông tin user:", error);
+        }
+      }
+      setAuthLoading(false);
+    };
+
+    fetchUserInfo();
+  }, []);
+
+  // Lấy userId an toàn
+  const currentUserId = currentUser ? (currentUser.userId || currentUser.id) : null;
+
+  // Chuyển hướng nếu load xong mà vẫn không có user
+  useEffect(() => {
+    if (!authLoading && !currentUserId) {
+      // Chỉ alert nếu người dùng cố thao tác, hoặc redirect ngay khi vào trang (tùy bạn)
+      // Ở đây mình để redirect ngay
+      const timer = setTimeout(() => {
+        alert("Phiên đăng nhập hết hạn hoặc chưa đăng nhập. Vui lòng đăng nhập lại!");
+        navigate("/login");
+      }, 500);
+      return () => clearTimeout(timer);
+    }
+  }, [authLoading, currentUserId, navigate]);
+
+  // --- [HẾT LOGIC MỚI] ---
+
   const selectedMovie = useMemo(() => {
-    // Nếu chưa có danh sách phim thì chưa chọn gì cả
     if (!movies || movies.length === 0) return null;
-
-    // Lấy ID từ URL
     const params = new URLSearchParams(location.search);
-    const urlMovieId = Number(params.get("movieId"));
-
-    // Tìm phim trong danh sách
-    const foundMovie = movies.find((m) => m.id === urlMovieId);
-
-    // Trả về phim tìm thấy hoặc phim đầu tiên làm mặc định
-    return foundMovie || movies[0];
+    const urlMovieId = params.get("movieId");
+    return movies.find((m) => String(m.id) === String(urlMovieId)) || movies[0];
   }, [movies, location.search]);
 
+  useEffect(() => { fetchShowtimes(); }, [fetchShowtimes]);
 
-  const [cinemaId, setCinemaId] = useState(cinemas[0].id);
-  const [dayKey, setDayKey] = useState(days[0].key);
-  const [time, setTime] = useState(times[0]);
-  const [selectedSeats, setSelectedSeats] = useState([]);
+  const availableCinemas = useMemo(() => cinemas?.filter(c => c.status === 'ACTIVE') || [], [cinemas]);
+  const next7Days = useMemo(() => getNext7Days(), []);
 
-  const cinema = useMemo(
-      () => cinemas.find((c) => c.id === cinemaId),
-      [cinemaId]
-  );
+  const availableTimes = useMemo(() => {
+    if (!selectedMovie || !selectedCinemaId || !selectedDate || !showtimes) return [];
+    const currentCinemaObj = cinemas.find(c => String(getCinemaId(c)) === String(selectedCinemaId));
+    if (!currentCinemaObj) return [];
+    const targetMovie = (selectedMovie.title || "").trim().toLowerCase().normalize('NFC');
+    const targetCinema = (currentCinemaObj.name || "").trim().toLowerCase().normalize('NFC');
+    return showtimes.filter((s) => {
+      const sMovie = String(s.movie || "").trim().toLowerCase().normalize('NFC');
+      const sCinema = String(s.cinema || "").trim().toLowerCase().normalize('NFC');
+      const sDate = String(s.date || "");
+      return sMovie === targetMovie && (sCinema.includes(targetCinema) || targetCinema.includes(sCinema)) && sDate === selectedDate;
+    }).sort((a, b) => (a.startTime || "").localeCompare(b.startTime || ""));
+  }, [showtimes, selectedMovie, selectedCinemaId, selectedDate, cinemas]);
 
-  const disabledSeats = useMemo(() => {
-    // Logic giả lập ghế đã đặt
-    const currentId = selectedMovie ? selectedMovie.id : 0;
-    const seed = (String(currentId) + cinemaId + dayKey + time).length;
-    const rows = ["A", "B", "C", "D", "E", "F", "G"];
-    const list = [];
-    rows.forEach((r, idx) => {
-      const col = ((seed + idx) % 10) + 1;
-      list.push(`${r}${col}`);
-    });
-    return list;
-  }, [selectedMovie, cinemaId, dayKey, time]);
-
-  const toggleSeat = (code) => {
-    setSelectedSeats((prev) =>
-        prev.includes(code) ? prev.filter((s) => s !== code) : [...prev, code]
-    );
+  const handleReset = () => {
+    resetSeatState();
+    clearCurrentBill();
+    setSelectedSeatIds([]);
+    setSelectedSeatNames([]);
+    setBookedSeatIds([]);
+    seatTicketMapRef.current = {};
+    pendingQueue.current = [];
+    isProcessingQueue.current = false;
+    localStorage.removeItem("activeBillId");
   };
 
-  const total = selectedSeats.length * pricePerSeat;
+  useEffect(() => { setSelectedDate(""); setSelectedShowtimeId(""); handleReset(); }, [selectedCinemaId]);
+  useEffect(() => { setSelectedShowtimeId(""); handleReset(); }, [selectedDate]);
 
-  // Render Loading nếu chưa có dữ liệu
-  if (isLoading || !selectedMovie) {
-    return (
-        <div className="min-h-screen flex items-center justify-center bg-gray-100">
-          <div className="flex flex-col items-center">
-            <Loader2 className="w-12 h-12 text-red-600 animate-spin mb-4" />
-            <p className="text-gray-500">Đang tải thông tin phim...</p>
-          </div>
-        </div>
-    );
-  }
+  // --- INIT TRANSACTION ---
+  useEffect(() => {
+    let isActive = true;
+    const initializeTransaction = async () => {
+      handleReset();
+      if (!selectedShowtimeId) return;
+
+      // Chờ Auth check xong mới chạy logic tạo bill
+      if (authLoading) return;
+
+      if (!currentUserId) {
+        // Đã xử lý redirect ở useEffect trên
+        return;
+      }
+
+      setIsInitializingBill(true);
+      try {
+        const showtimeObj = availableTimes.find(s => s.id === selectedShowtimeId);
+        if (!showtimeObj || !showtimeObj.roomId) throw new Error("Suất chiếu lỗi");
+
+        const [_, soldTickets] = await Promise.all([
+          fetchSeatsByRoom(showtimeObj.roomId),
+          getTicketsByShowtime(selectedShowtimeId)
+        ]);
+
+        if (isActive) {
+          const soldIds = Array.isArray(soldTickets) ? soldTickets.map(t => t.seatId || (t.seat ? t.seat.seatId : null)).filter(Boolean) : [];
+          setBookedSeatIds(soldIds);
+
+          const newBillPayload = { userId: currentUserId, paymentMethod: "", ticketId: [], comboId: [], paymentAt: "" };
+          const createdBill = await createBill(newBillPayload);
+
+          if (createdBill && createdBill.result) {
+            const bId = createdBill.result.billId || createdBill.result.id;
+            localStorage.setItem("activeBillId", bId);
+          }
+        }
+      } catch (error) {
+        console.error("Init error:", error);
+        if (isActive) setSelectedShowtimeId("");
+      } finally {
+        if (isActive) setIsInitializingBill(false);
+      }
+    };
+    initializeTransaction();
+    return () => { isActive = false; };
+  }, [selectedShowtimeId, currentUserId, authLoading]); // Thêm authLoading vào dependency
+
+  // --- QUEUE PROCESSOR (Giữ nguyên) ---
+  const processQueue = async () => {
+    if (isProcessingQueue.current || pendingQueue.current.length === 0) return;
+    isProcessingQueue.current = true;
+    const task = pendingQueue.current[0];
+    try {
+      if (!currentBill) throw new Error("No bill");
+      const billId = currentBill.billId || currentBill.id;
+
+      if (task.type === 'ADD') {
+        const ticketPayload = { userId: currentUserId, seatId: task.seatId, ticketName: `Vé ${task.seatName}`, showtimeId: selectedShowtimeId, price: pricePerSeat, billId: billId };
+        const createdTicket = await createSingleTicket(ticketPayload);
+        const newTicketId = createdTicket ? (createdTicket.ticketId || createdTicket.id) : null;
+        if (newTicketId) seatTicketMapRef.current[task.seatId] = newTicketId;
+      } else if (task.type === 'REMOVE') {
+        const ticketIdToDelete = seatTicketMapRef.current[task.seatId];
+        if (ticketIdToDelete) {
+          await deleteTicket(ticketIdToDelete);
+          delete seatTicketMapRef.current[task.seatId];
+        }
+      }
+      pendingQueue.current.shift();
+    } catch (error) {
+      if (task.type === 'ADD') {
+        setSelectedSeatIds(prev => prev.filter(id => id !== task.seatId));
+        setSelectedSeatNames(prev => prev.filter(name => name !== task.seatName));
+      }
+      pendingQueue.current.shift();
+    } finally {
+      isProcessingQueue.current = false;
+      if (pendingQueue.current.length > 0) processQueue();
+    }
+  };
+
+  const handleToggleSeat = (seatId, seatName) => {
+    if (isInitializingBill || !currentBill) return;
+    const isSelected = selectedSeatIds.includes(seatId);
+    if (isSelected) {
+      setSelectedSeatIds(prev => prev.filter(id => id !== seatId));
+      setSelectedSeatNames(prev => prev.filter(name => name !== seatName));
+      pendingQueue.current.push({ type: 'REMOVE', seatId, seatName });
+    } else {
+      setSelectedSeatIds(prev => [...prev, seatId]);
+      setSelectedSeatNames(prev => [...prev, seatName]);
+      pendingQueue.current.push({ type: 'ADD', seatId, seatName });
+    }
+    processQueue();
+  };
+
+  const handleContinue = () => {
+    if (pendingQueue.current.length > 0 || isProcessingQueue.current) {
+      alert("Đang xử lý vé...");
+      return;
+    }
+    if (!currentBill) {
+      alert("Lỗi: Không tìm thấy hóa đơn. Vui lòng chọn lại suất chiếu.");
+      return;
+    }
+    const billIdToSave = currentBill.billId || currentBill.id;
+    localStorage.setItem("activeBillId", String(billIdToSave));
+    const total = selectedSeatIds.length * pricePerSeat;
+    navigate("/booking/combo", { state: { seatTotal: total, seatNames: selectedSeatNames } });
+  };
+
+  const handleSelectCinema = (c) => { setSelectedCinemaId(getCinemaId(c)); setIsCinemaDropdownOpen(false); };
+  const currentCinemaName = cinemas?.find(c => String(getCinemaId(c)) === String(selectedCinemaId))?.name;
+  const total = selectedSeatIds.length * pricePerSeat;
+
+  // Render Loading khi đang check User hoặc Load phim
+  if (authLoading || !selectedMovie) return <div className="min-h-screen flex items-center justify-center gap-2"><Loader2 className="animate-spin text-red-600" /> <span className="text-gray-600 font-medium">Đang tải dữ liệu...</span></div>;
 
   return (
-      <div className="min-h-screen bg-gradient-to-br from-gray-50 via-gray-100 to-gray-200">
+      <div className="min-h-screen bg-gray-100 flex flex-col font-sans">
         <Header />
-
-        <div className="container mx-auto px-4 py-8">
-          {/* Movie Header Card */}
-          <div className="bg-gradient-to-r from-red-600 to-red-700 rounded-2xl shadow-2xl p-6 mb-8">
-            <div className="flex items-center gap-6">
-              <img
-                  src={selectedMovie.image}
-                  alt={selectedMovie.title}
-                  className="w-28 h-40 object-cover rounded-xl shadow-lg border-4 border-white/20"
-              />
+        <main className="flex-1 container mx-auto px-4 py-8">
+          {/* UI hiển thị phim */}
+          <div className="bg-gradient-to-r from-red-600 to-red-700 rounded-2xl shadow-2xl p-6 mb-8 text-white">
+            <div className="flex flex-col md:flex-row items-center gap-6">
+              <img src={selectedMovie.image} alt={selectedMovie.title} className="w-32 h-48 object-cover rounded-xl shadow-lg border-4 border-white/20" />
               <div className="flex-1">
-                <h1 className="text-4xl font-bold text-white mb-2">
-                  {selectedMovie.title}
-                </h1>
-                <div className="flex flex-wrap gap-3 text-white/90">
-                <span className="px-3 py-1 bg-white/20 rounded-full text-sm backdrop-blur">
-                   {selectedMovie.types ? selectedMovie.types.join(", ") : "Phim chiếu rạp"}
-                </span>
-                  <span className="px-3 py-1 bg-white/20 rounded-full text-sm backdrop-blur">
-                   {selectedMovie.duration}
-                </span>
-                  <span className="px-3 py-1 bg-white/20 rounded-full text-sm backdrop-blur">
-                   {selectedMovie.rating > 0 ? `${selectedMovie.rating} ⭐` : "Chưa có đánh giá"}
-                </span>
-                  <span className="px-3 py-1 bg-white/20 rounded-full text-sm backdrop-blur">
-                   {selectedMovie.age}
-                </span>
-                </div>
+                <h1 className="text-3xl font-bold mb-2">{selectedMovie.title}</h1>
+                <p className="opacity-90">{selectedMovie.durationDisplay || "120 phút"} | {selectedMovie.releaseDate}</p>
               </div>
             </div>
           </div>
 
-          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-            {/* Left: Selections */}
-            <div className="lg:col-span-1 space-y-4">
-              {/* ... Phần Chọn Rạp ... */}
-              <div className="bg-white rounded-2xl shadow-lg p-5 hover:shadow-xl transition-shadow">
-                <div className="flex items-center gap-2 mb-3">
-                  <svg className="w-5 h-5 text-red-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4" /></svg>
-                  <label className="text-base font-semibold text-gray-900">
-                    Chọn rạp
-                  </label>
-                </div>
-                <select
-                    className="w-full border-2 border-gray-200 rounded-xl px-4 py-3 focus:border-red-500 focus:outline-none transition-colors font-medium"
-                    value={cinemaId}
-                    onChange={(e) => setCinemaId(e.target.value)}
-                >
-                  {cinemas.map((c) => (
-                      <option key={c.id} value={c.id}>
-                        {c.name}
-                      </option>
-                  ))}
-                </select>
-                <p className="text-sm text-gray-500 mt-3 flex items-start gap-2">
-                  <svg className="w-4 h-4 mt-0.5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" /><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" /></svg>
-                  {cinema?.address}
-                </p>
-              </div>
-
-              {/* ... Phần Chọn Ngày ... */}
-              <div className="bg-white rounded-2xl shadow-lg p-5 hover:shadow-xl transition-shadow">
-                <div className="flex items-center gap-2 mb-3">
-                  <svg className="w-5 h-5 text-red-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" /></svg>
-                  <label className="text-base font-semibold text-gray-900">
-                    Ngày chiếu
-                  </label>
-                </div>
-                <div className="grid grid-cols-3 gap-2">
-                  {days.map((d) => (
-                      <button
-                          key={d.key}
-                          onClick={() => setDayKey(d.key)}
-                          className={`px-3 py-3 rounded-xl text-sm font-medium border-2 transition-all ${
-                              dayKey === d.key
-                                  ? "bg-red-600 text-white border-red-600 shadow-md scale-105"
-                                  : "bg-white hover:bg-gray-50 text-gray-700 border-gray-200 hover:border-red-300"
-                          }`}
-                      >
-                        {d.label}
-                      </button>
-                  ))}
+          {/* Layout chọn Rạp - Ngày - Giờ */}
+          <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
+            <div className="lg:col-span-4 space-y-4">
+              <div className="bg-white p-5 rounded-xl shadow-sm border border-gray-200 relative z-30">
+                <h3 className="font-bold text-gray-800 mb-3 flex items-center"><span className="w-6 h-6 rounded-full bg-red-100 text-red-600 flex items-center justify-center text-xs mr-2">1</span>Chọn Rạp</h3>
+                <div className="relative" ref={dropdownRef}>
+                  <button onClick={() => setIsCinemaDropdownOpen(!isCinemaDropdownOpen)} className="w-full p-3 rounded-lg border flex items-center justify-between">
+                    <span className="flex items-center gap-2 truncate"><MapPin className="w-4 h-4" />{currentCinemaName || "Vui lòng chọn rạp chiếu"}</span>
+                    {isCinemaDropdownOpen ? <ChevronUp className="w-5 h-5" /> : <ChevronDown className="w-5 h-5" />}
+                  </button>
+                  {isCinemaDropdownOpen && (
+                      <div className="absolute top-full left-0 w-full mt-2 bg-white border border-gray-200 rounded-xl shadow-xl max-h-60 overflow-y-auto custom-scrollbar z-50">
+                        {availableCinemas.map(c => (<button key={getCinemaId(c)} onClick={() => handleSelectCinema(c)} className="w-full text-left p-3 hover:bg-gray-50 border-b border-gray-50 flex justify-between"><span className="font-medium text-gray-700">{c.name}</span></button>))}
+                      </div>
+                  )}
                 </div>
               </div>
-
-              {/* ... Phần Chọn Giờ ... */}
-              <div className="bg-white rounded-2xl shadow-lg p-5 hover:shadow-xl transition-shadow">
-                <div className="flex items-center gap-2 mb-3">
-                  <svg className="w-5 h-5 text-red-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
-                  <label className="text-base font-semibold text-gray-900">
-                    Suất chiếu
-                  </label>
-                </div>
+              <div className="bg-white p-5 rounded-xl shadow-sm border border-gray-200 relative z-20">
+                <h3 className="font-bold text-gray-800 mb-3 flex items-center"><span className="w-6 h-6 rounded-full bg-red-100 text-red-600 flex items-center justify-center text-xs mr-2">2</span>Chọn Ngày</h3>
                 <div className="grid grid-cols-3 gap-2">
-                  {times.map((t) => (
-                      <button
-                          key={t}
-                          onClick={() => setTime(t)}
-                          className={`px-3 py-3 rounded-xl text-sm font-semibold border-2 transition-all ${
-                              time === t
-                                  ? "bg-red-600 text-white border-red-600 shadow-md scale-105"
-                                  : "bg-white hover:bg-gray-50 text-gray-700 border-gray-200 hover:border-red-300"
-                          }`}
-                      >
-                        {t}
-                      </button>
-                  ))}
+                  {next7Days.map(date => (<button key={date} onClick={() => setSelectedDate(date)} className={`py-2 px-1 rounded-lg text-sm border flex flex-col items-center ${selectedDate === date ? "bg-red-600 text-white" : "bg-white"}`}><span>{new Date(date).toLocaleDateString('vi-VN', {day: '2-digit', month: '2-digit'})}</span></button>))}
+                </div>
+              </div>
+              <div className="bg-white p-5 rounded-xl shadow-sm border border-gray-200 relative z-10">
+                <h3 className="font-bold text-gray-800 mb-3 flex items-center"><span className="w-6 h-6 rounded-full bg-red-100 text-red-600 flex items-center justify-center text-xs mr-2">3</span>Chọn Giờ</h3>
+                <div className="grid grid-cols-3 gap-2">
+                  {availableTimes.map(t => (<button key={t.id} onClick={() => setSelectedShowtimeId(t.id)} className={`py-2 rounded-lg text-sm font-bold border-2 ${selectedShowtimeId === t.id ? "border-red-600 bg-red-600 text-white" : "hover:border-red-300"}`}>{t.startTime.slice(0, 5)}</button>))}
                 </div>
               </div>
             </div>
 
-            {/* Center: Seat map */}
-            <div className="lg:col-span-2">
-              <div className="bg-white rounded-2xl shadow-xl p-6">
-                <div className="mb-6">
-                  <h2 className="text-2xl font-bold text-gray-900 mb-2">
-                    Chọn ghế ngồi
-                  </h2>
-                  <p className="text-gray-600 flex items-center gap-2">
-                    <svg
-                        className="w-5 h-5"
-                        fill="none"
-                        stroke="currentColor"
-                        viewBox="0 0 24 24"
-                    >
-                      <path
-                          strokeLinecap="round"
-                          strokeLinejoin="round"
-                          strokeWidth={2}
-                          d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"
-                      />
-                    </svg>
-                    {cinema?.name} • {days.find((d) => d.key === dayKey)?.label} •{" "}
-                    {time}
-                  </p>
+            <div className="lg:col-span-8">
+              <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-200 h-full flex flex-col">
+                <div className="flex justify-between items-center mb-6">
+                  <h2 className="text-xl font-bold text-gray-900">Sơ đồ ghế</h2>
+                  {isInitializingBill && <span className="text-xs text-red-500 animate-pulse ml-2">Đang khởi tạo...</span>}
                 </div>
-
-                <SeatMap
-                    selected={selectedSeats}
-                    onToggle={toggleSeat}
-                    disabled={disabledSeats}
-                />
-
-                <div className="mt-6 bg-gradient-to-br from-gray-50 to-gray-100 rounded-xl p-5 border-2 border-gray-200">
-                  <div className="flex items-center justify-between mb-3">
-                    <div className="text-gray-700">
-                      <span className="font-semibold">Ghế đã chọn:</span>{" "}
-                      <span className="text-red-600 font-bold">
-                      {selectedSeats.length > 0
-                          ? selectedSeats.join(", ")
-                          : "Chưa chọn ghế nào"}
-                    </span>
-                    </div>
-                  </div>
-
-                  <div className="flex items-end justify-between">
-                    <div className="text-sm text-gray-600">
-                      <div className="mb-1">
-                        Số lượng:{" "}
-                        <span className="font-semibold text-gray-900">
-                        {selectedSeats.length} ghế
-                      </span>
-                      </div>
-                      <div>
-                        Giá vé:{" "}
-                        <span className="font-semibold text-gray-900">
-                        {formatVND(pricePerSeat)}
-                      </span>{" "}
-                        / ghế
-                      </div>
-                    </div>
-                    <div className="text-right">
-                      <div className="text-sm text-gray-500 mb-1">
-                        Tổng thanh toán
-                      </div>
-                      <div className="text-3xl font-bold text-red-600">
-                        {formatVND(total)}
-                      </div>
-                    </div>
-                  </div>
+                <div className="flex-1 flex justify-center items-center bg-gray-50 rounded-xl border-2 border-dashed border-gray-200 min-h-[400px] overflow-hidden">
+                  {selectedShowtimeId ? (
+                      !isInitializingBill && dbSeats.length > 0 ? (
+                          <SeatMap seatDataFromDB={dbSeats} selectedIds={selectedSeatIds} bookedSeatIds={bookedSeatIds} onToggle={handleToggleSeat} isDisabled={isInitializingBill} />
+                      ) : <div className="text-gray-400">{isInitializingBill ? <Loader2 className="animate-spin"/> : "Không có dữ liệu ghế"}</div>
+                  ) : <p className="text-gray-400">Vui lòng chọn suất chiếu</p>}
                 </div>
-
-                <div className="mt-5 flex gap-3">
-                  <button
-                      className="flex-1 px-6 py-4 bg-gradient-to-r from-red-600 to-red-700 hover:from-red-700 hover:to-red-800 text-white rounded-xl font-bold text-lg shadow-lg hover:shadow-xl transition-all disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:shadow-lg flex items-center justify-center gap-2"
-                      disabled={selectedSeats.length === 0}
-                  >
-                    <svg
-                        className="w-6 h-6"
-                        fill="none"
-                        stroke="currentColor"
-                        viewBox="0 0 24 24"
-                    >
-                      <path
-                          strokeLinecap="round"
-                          strokeLinejoin="round"
-                          strokeWidth={2}
-                          d="M3 10h18M7 15h1m4 0h1m-7 4h12a3 3 0 003-3V8a3 3 0 00-3-3H6a3 3 0 00-3 3v8a3 3 0 003 3z"
-                      />
-                    </svg>
-                    Thanh toán
+                <div className="mt-6 pt-6 border-t border-gray-100">
+                  <div className="flex justify-between items-end mb-4">
+                    <div><p className="text-sm text-gray-600">Ghế chọn:</p><p className="font-bold text-lg text-gray-800">{selectedSeatNames.join(", ")}</p></div>
+                    <div className="text-right"><p className="text-sm text-gray-600">Tổng tiền:</p><p className="font-bold text-red-600 text-2xl">{formatVND(total)}</p></div>
+                  </div>
+                  <button onClick={handleContinue} disabled={selectedSeatIds.length === 0} className="w-full py-4 bg-red-600 text-white rounded-xl font-bold shadow-lg disabled:opacity-50 hover:bg-red-700 transition flex items-center justify-center gap-2">
+                    TIẾP TỤC CHỌN COMBO <ArrowRight size={20} />
                   </button>
                 </div>
               </div>
             </div>
           </div>
-        </div>
-
+        </main>
         <Footer />
       </div>
   );
 };
-
 export default Booking;

@@ -1,119 +1,127 @@
 /* eslint-disable react-refresh/only-export-components */
-import React, { createContext, useState, useEffect, useContext } from "react";
+import React, { createContext, useState, useContext, useCallback } from "react";
+import { request } from "../utils/request";
 
 const BillContext = createContext();
-
-// [QUAN TRỌNG] Thêm tiền tố /cinema để khớp với Proxy
-const API_BASE = "/cinema";
 
 export const BillProvider = ({ children }) => {
   const [bills, setBills] = useState([]);
   const [isLoading, setIsLoading] = useState(false);
+  const [currentBill, setCurrentBill] = useState(null);
 
-  // Helper: Lấy header có Token
-  const getAuthHeaders = () => {
-    const token = localStorage.getItem("token");
-    return {
-      "Content-Type": "application/json",
-      Authorization: token ? `Bearer ${token}` : "",
-    };
-  };
-
-  // Helper: Xử lý response chung
   const handleResponse = async (response) => {
-    const text = await response.text();
-    try {
-      const data = text ? JSON.parse(text) : {};
-      if (
-        !response.ok ||
-        (data.code !== undefined && data.code !== 0 && data.code !== 1000)
-      ) {
-        throw new Error(data.message || "Lỗi thao tác API");
+    if (!response.ok) {
+      const text = await response.text();
+      const errData = text ? JSON.parse(text) : {};
+      // Ném lỗi cụ thể nếu gặp 403 Forbidden (User thường không được gọi API của Admin)
+      if (response.status === 403) {
+        throw new Error("Bạn không có quyền truy cập dữ liệu này.");
       }
-      return data.result || data;
-    } catch (error) {
-      console.error("Lỗi parse JSON:", error);
-      throw new Error("Lỗi kết nối Server (Phản hồi không hợp lệ)");
+      throw new Error(errData.message || `Lỗi API: ${response.status}`);
     }
+    const data = await response.json();
+    if (data.code !== undefined && data.code !== 0 && data.code !== 1000) {
+      throw new Error(data.message || "Thao tác thất bại");
+    }
+    return data;
   };
 
-  // 1. GET: Lấy tất cả hóa đơn
-  const fetchAllBills = async () => {
+  // --- 1. LẤY TẤT CẢ BILL (Dành cho ADMIN) ---
+  const fetchAllBills = useCallback(async () => {
     setIsLoading(true);
     try {
-      // [SỬA] Thêm API_BASE
-      const response = await fetch(`${API_BASE}/bills`, {
-        method: "GET",
-        headers: getAuthHeaders(),
-      });
-
-      // Xử lý riêng cho hàm này vì nó set state trực tiếp
-      const text = await response.text();
-      const data = text ? JSON.parse(text) : {};
-
-      if (response.ok && (data.code === 0 || data.code === 1000)) {
-        setBills(data.result || []);
-      } else {
-        console.warn("Không tải được hóa đơn:", data.message);
-        setBills([]);
-      }
+      const response = await request("/cinema/bills", { method: "GET" });
+      const data = await handleResponse(response);
+      setBills(data.result || []);
     } catch (error) {
-      console.error("Lỗi tải hóa đơn:", error);
-      setBills([]);
+      console.error("Lỗi tải hóa đơn (Admin):", error);
+      // Không setBills([]) ở đây để tránh xoá dữ liệu nếu chỉ lỗi mạng tạm thời
     } finally {
       setIsLoading(false);
     }
-  };
-
-  // 2. GET: Lấy chi tiết hóa đơn
-  const getBillById = async (billId) => {
-    const response = await fetch(`${API_BASE}/bills/${billId}`, {
-      method: "GET",
-      headers: getAuthHeaders(),
-    });
-    return await handleResponse(response);
-  };
-
-  // 3. POST: Tạo hóa đơn mới
-  const createBill = async (billData) => {
-    const response = await fetch(`${API_BASE}/bills`, {
-      method: "POST",
-      headers: getAuthHeaders(),
-      body: JSON.stringify(billData),
-    });
-    return await handleResponse(response);
-  };
-
-  // 4. PUT: Cập nhật hóa đơn
-  const updateBill = async (billId, billData) => {
-    const response = await fetch(`${API_BASE}/bills/${billId}`, {
-      method: "PUT",
-      headers: getAuthHeaders(),
-      body: JSON.stringify(billData),
-    });
-    return await handleResponse(response);
-  };
-
-  // Tự động load khi mount (nếu cần)
-  useEffect(() => {
-    // fetchAllBills();
   }, []);
 
-  const refreshBills = () => fetchAllBills();
+  // --- 2. [MỚI] LẤY BILL THEO USER ID (Dành cho Khách hàng xem lịch sử) ---
+  const fetchBillsByUserId = useCallback(async (userId) => {
+    if (!userId) return;
+    setIsLoading(true);
+    try {
+      // Gọi vào API mới bạn vừa tạo ở Backend: /bills/user/{userId}
+      const response = await request(`/cinema/bills/user/${userId}`, { method: "GET" });
+      const data = await handleResponse(response);
+      setBills(data.result || []);
+    } catch (error) {
+      console.error("Lỗi tải lịch sử giao dịch:", error);
+      setBills([]); // Nếu lỗi thì coi như không có lịch sử
+    } finally {
+      setIsLoading(false);
+    }
+  }, []);
+
+  // --- 3. LẤY CHI TIẾT 1 BILL (Theo ID Hóa đơn) ---
+  const getBillById = useCallback(async (billId) => {
+    // Sửa lại đường dẫn chuẩn: /bills/{billId}
+    const response = await request(`/cinema/bills/${billId}`, { method: "GET" });
+    const data = await handleResponse(response);
+    return data.result || data;
+  }, []);
+
+  // --- 4. TẠO BILL ---
+  const createBill = useCallback(async (billData) => {
+    const response = await request("/cinema/bills", {
+      method: "POST",
+      body: JSON.stringify(billData),
+    });
+    const data = await handleResponse(response);
+    if (data.result) setCurrentBill(data.result);
+    return data;
+  }, []);
+
+  // --- 5. CẬP NHẬT BILL ---
+  const updateBill = useCallback(async (billId, billData) => {
+    const response = await request(`/cinema/bills/${billId}`, {
+      method: "PUT",
+      body: JSON.stringify(billData),
+    });
+    const data = await handleResponse(response);
+    return data;
+  }, []);
+
+  // --- 6. TẠO BILL COMBO ---
+  const createBillCombo = useCallback(async (billComboData) => {
+    const response = await request("/cinema/bill-combos", {
+      method: "POST",
+      body: JSON.stringify(billComboData),
+    });
+    const data = await handleResponse(response);
+    return data;
+  }, []);
+
+  const clearCurrentBill = useCallback(() => {
+    setCurrentBill(null);
+  }, []);
+
+  // Mặc định fetchBills sẽ gọi fetchAllBills (dùng cho trang Admin)
+  const refreshBills = useCallback(() => fetchAllBills(), [fetchAllBills]);
 
   return (
-    <BillContext.Provider
-      value={{
-        bills,
-        isLoading,
-        fetchBills: refreshBills,
-        getBillById,
-        createBill,
-        updateBill,
-      }}
-    >
-      {children}
-    </BillContext.Provider>
+      <BillContext.Provider
+          value={{
+            bills,
+            isLoading,
+            currentBill,
+            setCurrentBill,
+            clearCurrentBill,
+            fetchBills: refreshBills,      // Hàm cũ (cho Admin)
+            fetchBillsByUserId,            // Hàm MỚI (cho User xem lịch sử)
+            getBillById,
+            createBill,
+            updateBill,
+            createBillCombo
+          }}
+      >
+        {children}
+      </BillContext.Provider>
   );
 };
 
