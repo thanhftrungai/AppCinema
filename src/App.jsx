@@ -1,4 +1,5 @@
-import { Routes, Route, Navigate } from "react-router-dom";
+import { useEffect, useState } from "react";
+import { Navigate, Route, Routes, useLocation } from "react-router-dom";
 import Home from "./pages/Home";
 import Login from "./components/auth/Login";
 import Register from "./components/auth/Register";
@@ -11,13 +12,14 @@ import BookingHistory from "./pages/BookingHistory";
 import AllUpcoming from "./pages/AllUpcoming";
 import Account from "./pages/Account";
 import { AdminLayout } from "./admin/AdminLayout";
+import ChatWidget from "./components/chat/ChatWidget";
 
-// 1. IMPORT CÁC CONTEXT
+// Context providers
 import { UserProvider } from "./context/UserContext";
-import { BillProvider } from "./context/BillContext"; // <--- Thêm dòng này
-import { TicketProvider } from "./context/TicketContext"; // <--- Thêm dòng này
+import { BillProvider } from "./context/BillContext";
+import { TicketProvider } from "./context/TicketContext";
 
-// Component bảo vệ route admin
+// Guard admin routes
 const ProtectedAdminRoute = ({ children }) => {
   const isAuthenticated = localStorage.getItem("token");
   if (!isAuthenticated) {
@@ -26,7 +28,7 @@ const ProtectedAdminRoute = ({ children }) => {
   return children;
 };
 
-// Component bảo vệ route user
+// Guard user routes
 const ProtectedRoute = ({ children }) => {
   const isAuthenticated = localStorage.getItem("token");
   if (!isAuthenticated) {
@@ -36,10 +38,30 @@ const ProtectedRoute = ({ children }) => {
 };
 
 function App() {
+  const location = useLocation();
+  const [authToken, setAuthToken] = useState(() =>
+    localStorage.getItem("token")
+  );
+  const isAdminRoute = location.pathname.startsWith("/admin");
+
+  useEffect(() => {
+    const syncAuth = () => setAuthToken(localStorage.getItem("token"));
+    window.addEventListener("storage", syncAuth);
+    window.addEventListener("focus", syncAuth);
+    window.addEventListener("visibilitychange", syncAuth);
+    return () => {
+      window.removeEventListener("storage", syncAuth);
+      window.removeEventListener("focus", syncAuth);
+      window.removeEventListener("visibilitychange", syncAuth);
+    };
+  }, []);
+
+  useEffect(() => {
+    setAuthToken(localStorage.getItem("token"));
+  }, [location.pathname]);
+
   return (
-    /* 2. BỌC PROVIDER Ở NGOÀI CÙNG (HOẶC BAO QUANH ROUTES)
-       Để Booking.jsx và BookingHistory.jsx có thể sử dụng createBill, createTicket...
-    */
+    // Wrap providers outside routes so booking screens can use shared data
     <BillProvider>
       <TicketProvider>
         <Routes>
@@ -87,6 +109,9 @@ function App() {
           {/* Catch-all route */}
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
+
+        {/* Floating user chat widget, hidden on admin screens and when logged out */}
+        {!isAdminRoute && authToken && <ChatWidget />}
       </TicketProvider>
     </BillProvider>
   );

@@ -8,6 +8,7 @@ import {
   X,
   LogOut,
   Building2,
+  MessageSquare,
 } from "lucide-react";
 
 export const AdminSidebar = ({
@@ -23,7 +24,8 @@ export const AdminSidebar = ({
     { id: "rooms", icon: Building2, label: "Quản lý Phòng chiếu" },
     { id: "showtimes", icon: Calendar, label: "Quản lý Suất chiếu" },
     { id: "bookings", icon: Calendar, label: "Quản lý Đặt vé" },
-    { id: "users", icon: Users, label: "Quản lý Users" },
+    { id: "users", icon: Users, label: "Quản lý Người dùng" },
+    { id: "chat", icon: MessageSquare, label: "Chat" },
   ];
 
   return (
