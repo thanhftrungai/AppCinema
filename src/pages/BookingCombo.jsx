@@ -5,7 +5,7 @@ import Footer from "../components/layout/Footer";
 import { useComboContext } from "../context/ComboContext";
 import { useBillContext } from "../context/BillContext";
 import { Loader2, ShoppingBag, ArrowLeft, CheckCircle, X, CreditCard } from "lucide-react";
-import { formatDateTime } from "../utils/formatDate"; // <--- Import hàm xử lý giờ
+import { formatDateTime } from "../utils/formatDate"; // Import hàm xử lý giờ
 
 const formatVND = (v) => v.toLocaleString("vi-VN") + " đ";
 
@@ -13,7 +13,7 @@ const BookingCombo = () => {
     const navigate = useNavigate();
     const location = useLocation();
 
-    // Lấy dữ liệu an toàn
+    // Lấy dữ liệu an toàn từ trang trước
     const stateData = location.state || {};
     const { seatTotal = 0, seatNames = [] } = stateData;
 
@@ -34,26 +34,39 @@ const BookingCombo = () => {
     // State cho Modal
     const [isModalOpen, setIsModalOpen] = useState(false);
 
-    // --- LOGIC KHÔI PHỤC SESSION ---
+    // --- 1. LOGIC KHÔI PHỤC SESSION (Tránh mất đơn khi F5) ---
     useEffect(() => {
         const restoreSession = async () => {
-            if (!location.state) { navigate("/"); return; }
-            if (currentBill) { setIsRestoring(false); return; }
+            // Nếu không có state từ trang trước, kiểm tra xem có bill đang active không
+            if (!location.state && !localStorage.getItem("activeBillId")) {
+                navigate("/");
+                return;
+            }
+
+            if (currentBill) {
+                setIsRestoring(false);
+                return;
+            }
 
             const savedBillId = localStorage.getItem("activeBillId");
             if (savedBillId) {
                 try {
                     const billData = await getBillById(savedBillId);
                     if (billData) setCurrentBill(billData);
-                } catch (err) { navigate("/"); }
-            } else { navigate("/"); }
+                } catch (err) {
+                    navigate("/");
+                }
+            } else {
+                navigate("/");
+            }
             setIsRestoring(false);
         };
+
         fetchCombos();
         restoreSession();
     }, [fetchCombos, currentBill, location.state, getBillById, setCurrentBill, navigate]);
 
-    // --- TÍNH TOÁN ---
+    // --- 2. TÍNH TOÁN ---
     const handleQuantityChange = (comboId, delta) => {
         setQuantities(prev => {
             const currentQty = prev[comboId] || 0;
@@ -64,55 +77,60 @@ const BookingCombo = () => {
 
     const comboTotal = useMemo(() => {
         return combos.reduce((total, combo) => {
-            const qty = quantities[combo.id || combo.comboId] || 0;
+            const id = combo.id || combo.comboId;
+            const qty = quantities[id] || 0;
             return total + (qty * combo.price);
         }, 0);
     }, [combos, quantities]);
 
     const grandTotal = seatTotal + comboTotal;
 
-    // --- BƯỚC 1: NHẤN NÚT THANH TOÁN -> MỞ MODAL ---
+    // --- 3. BƯỚC 1: NHẤN NÚT THANH TOÁN -> MỞ MODAL ---
     const handleOpenConfirmation = () => {
         if (!currentBill) return;
-        setIsModalOpen(true); // Chỉ mở modal, chưa gọi API
+        setIsModalOpen(true);
     };
 
-    // --- BƯỚC 2: NGƯỜI DÙNG XÁC NHẬN TRONG MODAL -> GỌI API ---
+    // --- 4. BƯỚC 2: XÁC NHẬN & GỌI API ---
     const processPayment = async () => {
         setIsProcessing(true);
         try {
             const billId = currentBill.billId || currentBill.id;
 
-            // 1. Lưu Combo (Nếu có chọn)
+            // 4.1. Lưu Combo (Nếu có chọn)
             const comboRequests = Object.entries(quantities)
                 .filter(([_, qty]) => qty > 0)
-                .map(([comboId, qty]) => createBillCombo({ billId, comboId: parseInt(comboId), quantity: qty }));
+                .map(([comboId, qty]) => createBillCombo({
+                    billId,
+                    comboId: parseInt(comboId),
+                    quantity: qty
+                }));
 
             if (comboRequests.length > 0) await Promise.all(comboRequests);
 
-            // 2. Cập nhật Bill (Finish & Current Time)
+            // 4.2. Cập nhật Bill (Finish & Current Time)
             const updatePayload = {
-                userId: currentBill.userId || 1,
-                paymentMethod: "BANKING", // Có thể thay đổi tùy UI
-                paymentStatus: "DONE", // <--- YÊU CẦU: Pending -> Finished
-                paymentAt: new Date().toISOString(), // <--- YÊU CẦU: Giờ hiện tại (Backend nhận UTC)
+                userId: currentBill.userId || currentBill.user?.userId || 1,
+                paymentMethod: "BANKING",
+                paymentStatus: "DONE",
+                paymentAt: new Date().toISOString(), // Gửi giờ UTC lên server
             };
 
             await updateBill(billId, updatePayload);
 
-            // Thành công
+            // 4.3. Thành công
             alert("🎉 ĐẶT VÉ THÀNH CÔNG! Cảm ơn bạn đã sử dụng dịch vụ.");
 
             // Dọn dẹp
             localStorage.removeItem("activeBillId");
             clearCurrentBill();
             navigate("/");
-            // Hoặc navigate("/booking-history") nếu muốn user xem lại vé
 
         } catch (error) {
+            console.error(error);
             alert(`Lỗi thanh toán: ${error.message}`);
             setIsProcessing(false);
-            setIsModalOpen(false); // Đóng modal nếu lỗi để user thử lại
+            setIsModalOpen(false);
         }
     };
 
@@ -150,9 +168,9 @@ const BookingCombo = () => {
                                         <p className="font-bold text-red-600">{formatVND(combo.price)}</p>
                                     </div>
                                     <div className="flex items-center gap-3 bg-gray-50 p-2 rounded-lg border">
-                                        <button onClick={() => handleQuantityChange(id, -1)} className="w-8 h-8 bg-white font-bold" disabled={qty === 0}>-</button>
+                                        <button onClick={() => handleQuantityChange(id, -1)} className="w-8 h-8 bg-white font-bold rounded hover:bg-gray-200" disabled={qty === 0}>-</button>
                                         <span className="w-8 text-center font-bold">{qty}</span>
-                                        <button onClick={() => handleQuantityChange(id, 1)} className="w-8 h-8 bg-blue-600 text-white font-bold">+</button>
+                                        <button onClick={() => handleQuantityChange(id, 1)} className="w-8 h-8 bg-blue-600 text-white font-bold rounded hover:bg-blue-700">+</button>
                                     </div>
                                 </div>
                             );
@@ -162,12 +180,18 @@ const BookingCombo = () => {
                     {/* Panel Tổng kết */}
                     <div className="lg:col-span-1">
                         <div className="bg-white p-6 rounded-xl shadow-lg border border-gray-200 sticky top-24">
-                            <h3 className="text-xl font-bold mb-4 flex gap-2"><ShoppingBag/> Tạm tính</h3>
+                            <h3 className="text-xl font-bold mb-4 flex gap-2 items-center"><ShoppingBag className="text-red-600"/> Tạm tính</h3>
                             <div className="space-y-3 mb-6 border-b pb-6 text-sm">
-                                <div className="flex justify-between"><span>Ghế ({seatNames.length}):</span><span className="font-bold">{seatNames.join(", ")}</span></div>
+                                <div className="flex justify-between">
+                                    <span>Ghế ({seatNames.length}):</span>
+                                    <span className="font-bold text-right ml-4 break-words max-w-[150px]">{seatNames.join(", ")}</span>
+                                </div>
                                 <div className="flex justify-between"><span>Combo:</span><span>{formatVND(comboTotal)}</span></div>
                             </div>
-                            <div className="flex justify-between items-end mb-6"><span className="font-bold text-lg">Tổng cộng:</span><span className="font-bold text-red-600 text-2xl">{formatVND(grandTotal)}</span></div>
+                            <div className="flex justify-between items-end mb-6">
+                                <span className="font-bold text-lg">Tổng cộng:</span>
+                                <span className="font-bold text-red-600 text-2xl">{formatVND(grandTotal)}</span>
+                            </div>
 
                             {/* Nút mở Modal */}
                             <button onClick={handleOpenConfirmation} className="w-full py-4 bg-red-600 text-white rounded-xl font-bold shadow-lg hover:bg-red-700 transition">
@@ -206,7 +230,8 @@ const BookingCombo = () => {
                                     <p className="text-sm text-gray-500 mb-2">Bắp & Nước:</p>
                                     <ul className="space-y-2">
                                         {selectedCombosList.map(c => (
-                                            <li key={c.id} className="flex justify-between text-sm">
+                                            // ✅ ĐÃ SỬA KEY Ở ĐÂY ĐỂ TRÁNH LỖI DUPLICATE KEY
+                                            <li key={c.id || c.comboId} className="flex justify-between text-sm">
                                                 <span>{quantities[c.id || c.comboId]}x {c.name}</span>
                                                 <span className="font-medium">{formatVND(c.price * quantities[c.id || c.comboId])}</span>
                                             </li>
@@ -215,7 +240,7 @@ const BookingCombo = () => {
                                 </div>
                             )}
 
-                            {/* Thông tin thời gian (Đã sửa UTC+7) */}
+                            {/* Thông tin thời gian */}
                             <div className="flex justify-between items-center text-sm text-gray-500 pt-2 border-t">
                                 <span>Thời gian thanh toán:</span>
                                 <span className="font-medium text-gray-800">{formatDateTime(new Date())}</span>

@@ -94,7 +94,6 @@ const Booking = () => {
   const { movies } = useMovieContext();
   const { showtimes, fetchShowtimes } = useShowtimeContext();
   const { cinemas } = useCinemaContext();
-  // 👇 Đảm bảo Context Seat đã có hàm resetSeatState (nếu chưa có thì update SeatContext như tin nhắn trước)
   const { seats: dbSeats, fetchSeatsByRoom, resetSeatState } = useSeatContext();
   const { createBill, currentBill, clearCurrentBill } = useBillContext();
   const { createSingleTicket, deleteTicket, getTicketsByShowtime } = useTicketContext();
@@ -110,6 +109,7 @@ const Booking = () => {
   const [selectedSeatIds, setSelectedSeatIds] = useState([]);
   const [selectedSeatNames, setSelectedSeatNames] = useState([]);
   const [bookedSeatIds, setBookedSeatIds] = useState([]);
+  const [isSyncing, setIsSyncing] = useState(false); // <--- Trạng thái đang đồng bộ vé (Loading Button)
 
   // Queue & Refs
   const seatTicketMapRef = useRef({});
@@ -134,7 +134,7 @@ const Booking = () => {
 
       if (token) {
         try {
-          const response = await fetch("/cinema/users/myInfo", { // Dùng đường dẫn tương đối qua Proxy
+          const response = await fetch("/cinema/users/myInfo", {
             method: "GET",
             headers: {
               "Authorization": `Bearer ${token}`,
@@ -162,7 +162,6 @@ const Booking = () => {
 
   const currentUserId = currentUser ? (currentUser.userId || currentUser.id) : null;
 
-  // Chuyển hướng nếu chưa đăng nhập
   useEffect(() => {
     if (!authLoading && !currentUserId) {
       const timer = setTimeout(() => {
@@ -178,7 +177,6 @@ const Booking = () => {
     if (!movies || movies.length === 0) return null;
     const params = new URLSearchParams(location.search);
     const urlMovieId = params.get("movieId");
-    // So sánh linh hoạt cả chuỗi và số
     return movies.find((m) => String(m.id) === String(urlMovieId)) || movies[0];
   }, [movies, location.search]);
 
@@ -191,7 +189,6 @@ const Booking = () => {
   const availableTimes = useMemo(() => {
     if (!selectedMovie || !selectedCinemaId || !selectedDate || !showtimes) return [];
 
-    // Tìm rạp đang chọn
     const currentCinemaObj = cinemas.find(c => String(getCinemaId(c)) === String(selectedCinemaId));
     if (!currentCinemaObj) return [];
 
@@ -200,22 +197,17 @@ const Booking = () => {
 
     return showtimes.filter((s) => {
       const sMovie = String(s.movie || "").trim().toLowerCase();
-      const sCinema = String(s.cinema || "").trim().toLowerCase(); // Hoặc s.room.cinema.name nếu cấu trúc object khác
+      const sCinema = String(s.cinema || "").trim().toLowerCase();
       const sDate = String(s.date || "");
-
-      // So sánh tương đối để tránh lỗi case sensitive
       const isMovieMatch = sMovie === targetMovie || sMovie.includes(targetMovie);
       const isCinemaMatch = sCinema.includes(targetCinema) || targetCinema.includes(sCinema);
-
       return isMovieMatch && isCinemaMatch && sDate === selectedDate;
     }).sort((a, b) => (a.startTime || "").localeCompare(b.startTime || ""));
   }, [showtimes, selectedMovie, selectedCinemaId, selectedDate, cinemas]);
 
-  // Hàm Reset trạng thái khi đổi phim/rạp/ngày
+  // Hàm Reset trạng thái
   const handleReset = () => {
-    if (typeof resetSeatState === 'function') {
-      resetSeatState();
-    }
+    if (typeof resetSeatState === 'function') resetSeatState();
     clearCurrentBill();
     setSelectedSeatIds([]);
     setSelectedSeatNames([]);
@@ -223,54 +215,43 @@ const Booking = () => {
     seatTicketMapRef.current = {};
     pendingQueue.current = [];
     isProcessingQueue.current = false;
+    setIsSyncing(false); // Reset loading state
     localStorage.removeItem("activeBillId");
   };
 
   useEffect(() => { setSelectedDate(""); setSelectedShowtimeId(""); handleReset(); }, [selectedCinemaId]);
   useEffect(() => { setSelectedShowtimeId(""); handleReset(); }, [selectedDate]);
 
-  // --- 👇 [QUAN TRỌNG] INIT TRANSACTION (SỬA LỖI 400 Ở ĐÂY) 👇 ---
+  // --- INIT TRANSACTION ---
   useEffect(() => {
     let isActive = true;
     const initializeTransaction = async () => {
-      handleReset(); // Reset ghế cũ trước khi load ghế mới
-
+      handleReset();
       if (!selectedShowtimeId || authLoading || !currentUserId) return;
 
       setIsInitializingBill(true);
       try {
         const showtimeObj = availableTimes.find(s => s.id === selectedShowtimeId);
-
         if (!showtimeObj) throw new Error("Không tìm thấy thông tin suất chiếu");
 
-        // ✅ [FIX LỖI 400] Kiểm tra và lấy roomId chuẩn xác từ các trường hợp có thể xảy ra
         const realRoomId = showtimeObj.roomId
             || (showtimeObj.room ? showtimeObj.room.id : null)
             || (showtimeObj.room ? showtimeObj.room.roomId : null);
 
-        if (!realRoomId) {
-          console.error("Dữ liệu suất chiếu bị thiếu Room ID:", showtimeObj);
-          throw new Error("Lỗi dữ liệu: Không tìm thấy ID phòng chiếu");
-        }
+        if (!realRoomId) throw new Error("Lỗi dữ liệu: Không tìm thấy ID phòng chiếu");
 
-        console.log("Calling fetchSeatsByRoom with ID:", realRoomId);
-
-        // Gọi đồng thời: Lấy ghế của phòng & Lấy vé đã bán của suất chiếu đó
         const [_, soldTickets] = await Promise.all([
           fetchSeatsByRoom(realRoomId),
           getTicketsByShowtime(selectedShowtimeId)
         ]);
 
         if (isActive) {
-          // Xử lý danh sách ghế đã bán
           const soldIds = Array.isArray(soldTickets) ? soldTickets.map(t => {
-            // Kiểm tra cấu trúc ticket trả về để lấy seatId đúng
             return t.seatId || (t.seat ? t.seat.seatId : null) || (t.seat ? t.seat.id : null);
           }).filter(Boolean) : [];
 
           setBookedSeatIds(soldIds);
 
-          // Tạo hóa đơn tạm (Bill Pending)
           const newBillPayload = {
             userId: currentUserId,
             paymentMethod: "",
@@ -287,21 +268,27 @@ const Booking = () => {
         }
       } catch (error) {
         console.error("Init Transaction Error:", error);
-        if (isActive) setSelectedShowtimeId(""); // Bỏ chọn nếu lỗi
+        if (isActive) setSelectedShowtimeId("");
       } finally {
         if (isActive) setIsInitializingBill(false);
       }
     };
 
     initializeTransaction();
-
     return () => { isActive = false; };
   }, [selectedShowtimeId, currentUserId, authLoading]);
 
-  // --- QUEUE PROCESSOR (Xử lý chọn ghế realtime) ---
+  // --- QUEUE PROCESSOR (Đã tối ưu UX) ---
   const processQueue = async () => {
-    if (isProcessingQueue.current || pendingQueue.current.length === 0) return;
+    if (isProcessingQueue.current || pendingQueue.current.length === 0) {
+      // Nếu không còn việc để làm thì tắt loading
+      if (pendingQueue.current.length === 0) setIsSyncing(false);
+      return;
+    }
+
     isProcessingQueue.current = true;
+    setIsSyncing(true); // Bật loading ngay khi bắt đầu xử lý
+
     const task = pendingQueue.current[0];
     try {
       if (!currentBill) throw new Error("Chưa có hóa đơn (Bill chưa tạo)");
@@ -319,7 +306,6 @@ const Booking = () => {
         };
         const createdTicket = await createSingleTicket(ticketPayload);
         const newTicketId = createdTicket ? (createdTicket.ticketId || createdTicket.id) : null;
-
         if (newTicketId) seatTicketMapRef.current[task.seatId] = newTicketId;
 
       } else if (task.type === 'REMOVE') {
@@ -330,11 +316,9 @@ const Booking = () => {
         }
       }
 
-      // Xóa task đã xong
       pendingQueue.current.shift();
     } catch (error) {
       console.error("Lỗi xử lý ghế:", error);
-      // Rollback UI nếu lỗi
       if (task.type === 'ADD') {
         setSelectedSeatIds(prev => prev.filter(id => id !== task.seatId));
         setSelectedSeatNames(prev => prev.filter(name => name !== task.seatName));
@@ -342,8 +326,12 @@ const Booking = () => {
       pendingQueue.current.shift();
     } finally {
       isProcessingQueue.current = false;
-      // Tiếp tục xử lý nếu còn hàng đợi
-      if (pendingQueue.current.length > 0) processQueue();
+      // Tiếp tục xử lý nếu còn hàng đợi, ngược lại thì tắt loading
+      if (pendingQueue.current.length > 0) {
+        processQueue();
+      } else {
+        setIsSyncing(false); // ✅ Đã xử lý xong hết, tắt loading
+      }
     }
   };
 
@@ -353,18 +341,19 @@ const Booking = () => {
       return;
     }
 
+    // ✅ Bật Syncing ngay khi người dùng click
+    setIsSyncing(true);
+
     const isSelected = selectedSeatIds.includes(seatId);
 
     if (isSelected) {
-      // Bỏ chọn
       setSelectedSeatIds(prev => prev.filter(id => id !== seatId));
       setSelectedSeatNames(prev => prev.filter(name => name !== seatName));
       pendingQueue.current.push({ type: 'REMOVE', seatId, seatName });
     } else {
-      // Chọn mới
-      // (Optional) Check max ghế ở đây
       if (selectedSeatIds.length >= 8) {
         alert("Bạn chỉ được chọn tối đa 8 ghế!");
+        setIsSyncing(false); // Tắt loading nếu lỗi
         return;
       }
       setSelectedSeatIds(prev => [...prev, seatId]);
@@ -375,16 +364,14 @@ const Booking = () => {
   };
 
   const handleContinue = () => {
-    if (pendingQueue.current.length > 0 || isProcessingQueue.current) {
-      alert("Hệ thống đang xử lý vé, vui lòng đợi...");
-      return;
-    }
+    // Không cần alert nữa, vì nút đã bị disable khi isSyncing = true
+    if (isSyncing || pendingQueue.current.length > 0) return;
+
     if (!currentBill) {
       alert("Lỗi phiên làm việc. Vui lòng tải lại trang.");
       return;
     }
 
-    // Chuyển sang trang Combo
     const billIdToSave = currentBill.billId || currentBill.id;
     localStorage.setItem("activeBillId", String(billIdToSave));
     const total = selectedSeatIds.length * pricePerSeat;
@@ -396,7 +383,6 @@ const Booking = () => {
   const currentCinemaName = cinemas?.find(c => String(getCinemaId(c)) === String(selectedCinemaId))?.name;
   const total = selectedSeatIds.length * pricePerSeat;
 
-  // Render Loading
   if (authLoading || !selectedMovie) return (
       <div className="min-h-screen flex items-center justify-center gap-2">
         <Loader2 className="animate-spin text-red-600" />
@@ -517,9 +503,24 @@ const Booking = () => {
                       <p className="font-bold text-red-600 text-3xl tracking-tight">{formatVND(total)}</p>
                     </div>
                   </div>
-                  <button onClick={handleContinue} disabled={selectedSeatIds.length === 0}
-                          className="w-full py-4 bg-red-600 text-white rounded-xl font-bold shadow-lg shadow-red-600/30 disabled:opacity-50 disabled:shadow-none hover:bg-red-700 active:scale-[0.99] transition flex items-center justify-center gap-2 text-lg">
-                    TIẾP TỤC CHỌN COMBO <ArrowRight size={20} strokeWidth={2.5} />
+
+                  {/* 👇 NÚT TIẾP TỤC ĐÃ ĐƯỢC CẢI TIẾN UX 👇 */}
+                  <button onClick={handleContinue} disabled={selectedSeatIds.length === 0 || isSyncing}
+                          className={`w-full py-4 rounded-xl font-bold shadow-lg flex items-center justify-center gap-2 text-lg transition-all
+                              ${selectedSeatIds.length === 0 || isSyncing
+                              ? "bg-gray-400 text-gray-200 cursor-not-allowed shadow-none"
+                              : "bg-red-600 text-white shadow-red-600/30 hover:bg-red-700 active:scale-[0.99]"
+                          }`}>
+                    {isSyncing ? (
+                        <>
+                          <Loader2 className="animate-spin" size={20} />
+                          <span>Đang đồng bộ vé...</span>
+                        </>
+                    ) : (
+                        <>
+                          TIẾP TỤC CHỌN COMBO <ArrowRight size={20} strokeWidth={2.5} />
+                        </>
+                    )}
                   </button>
                 </div>
               </div>
