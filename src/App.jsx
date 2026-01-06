@@ -6,6 +6,7 @@ import Register from "./components/auth/Register";
 import AllPhim from "./pages/AllPhim";
 import CardPhim from "./pages/CardPhim";
 import Booking from "./pages/Booking";
+import BookingCombo from "./pages/BookingCombo"; // <--- 1. Import Component mới
 import News from "./pages/News";
 import Cinemas from "./pages/Cinemas";
 import BookingHistory from "./pages/BookingHistory";
@@ -18,6 +19,7 @@ import ChatWidget from "./components/chat/ChatWidget";
 import { UserProvider } from "./context/UserContext";
 import { BillProvider } from "./context/BillContext";
 import { TicketProvider } from "./context/TicketContext";
+import { ComboProvider } from "./context/ComboContext"; // <--- 2. Import ComboContext
 
 // Guard admin routes
 const ProtectedAdminRoute = ({ children }) => {
@@ -40,7 +42,7 @@ const ProtectedRoute = ({ children }) => {
 function App() {
   const location = useLocation();
   const [authToken, setAuthToken] = useState(() =>
-    localStorage.getItem("token")
+      localStorage.getItem("token")
   );
   const isAdminRoute = location.pathname.startsWith("/admin");
 
@@ -61,59 +63,66 @@ function App() {
   }, [location.pathname]);
 
   return (
-    // Wrap providers outside routes so booking screens can use shared data
-    <BillProvider>
-      <TicketProvider>
-        <Routes>
-          {/* Public Routes */}
-          <Route path="/" element={<Home />} />
-          <Route path="/all" element={<AllPhim />} />
-          <Route path="/upcoming" element={<AllUpcoming />} />
-          <Route path="/movie/:id" element={<CardPhim />} />
-          <Route path="/login" element={<Login />} />
-          <Route path="/register" element={<Register />} />
-          <Route path="/booking" element={<Booking />} />
-          <Route path="/news" element={<News />} />
-          <Route path="/cinemas" element={<Cinemas />} />
+      // Wrap providers outside routes so booking screens can use shared data
+      <BillProvider>
+        <TicketProvider>
+          {/* 3. Bọc ComboProvider để trang BookingCombo dùng được context */}
+          <ComboProvider>
+            <Routes>
+              {/* Public Routes */}
+              <Route path="/" element={<Home />} />
+              <Route path="/all" element={<AllPhim />} />
+              <Route path="/upcoming" element={<AllUpcoming />} />
+              <Route path="/movie/:id" element={<CardPhim />} />
+              <Route path="/login" element={<Login />} />
+              <Route path="/register" element={<Register />} />
 
-          {/* Protected User Routes */}
-          <Route
-            path="/booking-history"
-            element={
-              <ProtectedRoute>
-                <BookingHistory />
-              </ProtectedRoute>
-            }
-          />
-          <Route
-            path="/account"
-            element={
-              <ProtectedRoute>
-                <Account />
-              </ProtectedRoute>
-            }
-          />
+              {/* Quy trình đặt vé */}
+              <Route path="/booking" element={<Booking />} />
+              <Route path="/booking/combo" element={<BookingCombo />} /> {/* <--- 4. Thêm Route này */}
 
-          {/* Admin Routes */}
-          <Route
-            path="/admin/dashboard"
-            element={
-              <ProtectedAdminRoute>
-                <UserProvider>
-                  <AdminLayout />
-                </UserProvider>
-              </ProtectedAdminRoute>
-            }
-          />
+              <Route path="/news" element={<News />} />
+              <Route path="/cinemas" element={<Cinemas />} />
 
-          {/* Catch-all route */}
-          <Route path="*" element={<Navigate to="/" replace />} />
-        </Routes>
+              {/* Protected User Routes */}
+              <Route
+                  path="/booking-history"
+                  element={
+                    <ProtectedRoute>
+                      <BookingHistory />
+                    </ProtectedRoute>
+                  }
+              />
+              <Route
+                  path="/account"
+                  element={
+                    <ProtectedRoute>
+                      <Account />
+                    </ProtectedRoute>
+                  }
+              />
 
-        {/* Floating user chat widget, hidden on admin screens and when logged out */}
-        {!isAdminRoute && authToken && <ChatWidget />}
-      </TicketProvider>
-    </BillProvider>
+              {/* Admin Routes */}
+              <Route
+                  path="/admin/dashboard"
+                  element={
+                    <ProtectedAdminRoute>
+                      <UserProvider>
+                        <AdminLayout />
+                      </UserProvider>
+                    </ProtectedAdminRoute>
+                  }
+              />
+
+              {/* Catch-all route */}
+              <Route path="*" element={<Navigate to="/" replace />} />
+            </Routes>
+
+            {/* Floating user chat widget, hidden on admin screens and when logged out */}
+            {!isAdminRoute && authToken && <ChatWidget />}
+          </ComboProvider>
+        </TicketProvider>
+      </BillProvider>
   );
 }
 
