@@ -1,45 +1,27 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
-import SockJS from "sockjs-client/dist/sockjs";
-import Stomp from "stompjs";
+import {
+  addDoc,
+  collection,
+  doc,
+  onSnapshot,
+  orderBy,
+  query,
+  serverTimestamp,
+  setDoc,
+} from "firebase/firestore";
+import { db } from "../lib/firebase";
 
 const cn = (...classes) => classes.filter(Boolean).join(" ");
 
-const getApiBase = () => {
-  if (typeof import.meta !== "undefined" && import.meta.env?.VITE_CHAT_API) {
-    return import.meta.env.VITE_CHAT_API;
-  }
-  if (typeof process !== "undefined" && process.env?.REACT_APP_CHAT_API) {
-    return process.env.REACT_APP_CHAT_API;
-  }
-  return "http://localhost:4000";
-};
-const API_BASE = getApiBase();
-const getWsUrl = () => {
-  if (typeof import.meta !== "undefined" && import.meta.env?.VITE_CHAT_WS) {
-    return import.meta.env.VITE_CHAT_WS.replace(/^ws/, "http");
-  }
-  if (typeof process !== "undefined" && process.env?.REACT_APP_CHAT_WS) {
-    return process.env.REACT_APP_CHAT_WS.replace(/^ws/, "http");
-  }
+const formatTime = (value) => {
   try {
-    const url = new URL(API_BASE);
-    // SockJS requires http/https endpoint
-    url.protocol = url.protocol === "https:" ? "https:" : "http:";
-    url.pathname = "/ws-chat";
-    return url.toString();
-  } catch {
-    return "http://localhost:4000/ws-chat";
-  }
-};
-const WS_URL = getWsUrl();
-
-const formatTime = (iso) => {
-  try {
-    const d = new Date(iso);
-    return d.toLocaleTimeString("vi-VN", {
-      hour: "2-digit",
-      minute: "2-digit",
-    });
+    const d =
+      value?.toDate?.() instanceof Date
+        ? value.toDate()
+        : value instanceof Date
+          ? value
+          : new Date(value);
+    return d.toLocaleTimeString("vi-VN", { hour: "2-digit", minute: "2-digit" });
   } catch {
     return "";
   }
@@ -57,174 +39,59 @@ export default function AdminChat() {
   const [error, setError] = useState("");
 
   const listRef = useRef(null);
-  const stompRef = useRef(null);
-  const connectedRef = useRef(false);
-  const currentSubRef = useRef(null);
-  const messagePollRef = useRef(null);
 
-  const activeUser = useMemo(
-    () => allUsers.find((u) => u.id === activeUserId) || null,
-    [allUsers, activeUserId]
-  );
-
-  const loadConversations = async () => {
-    setLoadingUsers(true);
-    setError("");
-    try {
-      const res = await fetch(`${API_BASE}/api/chat/conversations`);
-      if (!res.ok) throw new Error("Khong tai duoc danh sach chat");
-      const data = await res.json();
-      const mapped = Array.isArray(data)
-        ? data.map((c) => ({
-            id: String(c.userId),
-            name: String(c.userId),
-            last: c.lastMessage || "Chua co tin nhan",
-            unread: c.unreadCount || 0,
-          }))
-        : [];
-      setAllUsers(mapped);
-      setUsers(mapped);
-      if (!activeUserId && mapped[0]) setActiveUserId(mapped[0].id);
-    } catch (err) {
-      setError(err.message || "Loi tai danh sach chat");
-    } finally {
-      setLoadingUsers(false);
-    }
-  };
-
-  const fetchMessages = async (userId) => {
-    if (!userId) return;
-    setLoadingMessages(true);
-    setError("");
-    try {
-      const res = await fetch(
-        `${API_BASE}/api/chat/messages/${encodeURIComponent(userId)}`
-      );
-      if (!res.ok) throw new Error("Khong tai duoc tin nhan");
-      const data = await res.json();
-      setMessages(Array.isArray(data) ? data : Array.isArray(data?.data) ? data.data : []);
-      loadConversations();
-    } catch (err) {
-      setError(err.message || "Loi tai tin nhan");
-    } finally {
-      setLoadingMessages(false);
-    }
-  };
-
+  // Realtime conversations list
   useEffect(() => {
-    loadConversations();
-    const poll = setInterval(loadConversations, 5000);
-    // setup websocket
-    const socket = new SockJS(WS_URL);
-    const stomp = Stomp.over(socket);
-    stomp.debug = () => {};
-    stomp.connect(
-      {},
-      () => {
-        connectedRef.current = true;
-        // nếu đã có user đang mở trước khi connect hoàn tất, subscribe luôn
-        if (activeUserId) {
-          if (currentSubRef.current) {
-            currentSubRef.current.unsubscribe();
-            currentSubRef.current = null;
-          }
-          const sub = stomp.subscribe(
-            `/topic/chat/${activeUserId}`,
-            (msg) => {
-              try {
-                const body = JSON.parse(msg.body);
-                setMessages((prev) => {
-                  if (prev.some((m) => m.id === body.id)) return prev;
-                  return [...prev, body];
-                });
-                loadConversations();
-                // đảm bảo đồng bộ lịch sử nếu server sắp xếp khác
-                fetchMessages(activeUserId);
-              } catch {
-                // ignore
-              }
-            }
-          );
-          currentSubRef.current = sub;
-        }
+    setLoadingUsers(true);
+    const q = query(
+      collection(db, "conversations"),
+      orderBy("updatedAt", "desc")
+    );
+    const unsub = onSnapshot(
+      q,
+      (snap) => {
+        const mapped = snap.docs.map((d) => ({
+          id: d.id,
+          name: d.data().userId || d.id,
+          last: d.data().lastMessage || "Chua co tin nhan",
+          unread: d.data().unread || 0,
+        }));
+        setAllUsers(mapped);
+        setUsers(mapped);
+        if (!activeUserId && mapped[0]) setActiveUserId(mapped[0].id);
+        setLoadingUsers(false);
       },
-      () => {
-        connectedRef.current = false;
-        setError("Mat ket noi chat");
+      (err) => {
+        setError(err.message || "Loi tai danh sach chat");
+        setLoadingUsers(false);
       }
     );
-    stompRef.current = stomp;
-    return () => {
-      clearInterval(poll);
-      if (stompRef.current && connectedRef.current) {
-        stompRef.current.disconnect(() => {});
-      }
-      connectedRef.current = false;
-    };
-  }, []);
+    return () => unsub();
+  }, [activeUserId]);
 
+  // Realtime messages of active conversation
   useEffect(() => {
     if (!activeUserId) {
       setMessages([]);
-      if (messagePollRef.current) {
-        clearInterval(messagePollRef.current);
-        messagePollRef.current = null;
-      }
-      return;
+      return undefined;
     }
-    fetchMessages(activeUserId);
-
-    if (stompRef.current && connectedRef.current) {
-      if (currentSubRef.current) {
-        currentSubRef.current.unsubscribe();
-        currentSubRef.current = null;
+    setLoadingMessages(true);
+    const q = query(
+      collection(db, "conversations", activeUserId, "messages"),
+      orderBy("createdAt", "asc")
+    );
+    const unsub = onSnapshot(
+      q,
+      (snap) => {
+        setMessages(snap.docs.map((d) => ({ id: d.id, ...d.data() })));
+        setLoadingMessages(false);
+      },
+      (err) => {
+        setError(err.message || "Loi tai tin nhan");
+        setLoadingMessages(false);
       }
-      const sub = stompRef.current.subscribe(
-        `/topic/chat/${activeUserId}`,
-        (msg) => {
-          try {
-            const body = JSON.parse(msg.body);
-            setMessages((prev) => {
-              if (prev.some((m) => m.id === body.id)) return prev;
-              return [...prev, body];
-            });
-            loadConversations();
-            fetchMessages(activeUserId);
-          } catch {
-            // ignore
-          }
-        }
-      );
-      currentSubRef.current = sub;
-    }
-
-    return () => {
-      if (currentSubRef.current) {
-        currentSubRef.current.unsubscribe();
-        currentSubRef.current = null;
-      }
-      if (messagePollRef.current) {
-        clearInterval(messagePollRef.current);
-        messagePollRef.current = null;
-      }
-    };
-  }, [activeUserId]);
-
-  // Fallback polling to keep messages fresh in case WS chậm/mất
-  useEffect(() => {
-    if (!activeUserId) return;
-    if (messagePollRef.current) {
-      clearInterval(messagePollRef.current);
-      messagePollRef.current = null;
-    }
-    const id = setInterval(() => fetchMessages(activeUserId), 3000);
-    messagePollRef.current = id;
-    return () => {
-      if (messagePollRef.current) {
-        clearInterval(messagePollRef.current);
-        messagePollRef.current = null;
-      }
-    };
+    );
+    return () => unsub();
   }, [activeUserId]);
 
   useEffect(() => {
@@ -241,33 +108,41 @@ export default function AdminChat() {
     const q = searchTerm.toLowerCase();
     setUsers(
       allUsers.filter(
-        (u) =>
-          u.name.toLowerCase().includes(q) || u.id.toLowerCase().includes(q)
+        (u) => u.name.toLowerCase().includes(q) || u.id.toLowerCase().includes(q)
       )
     );
   }, [searchTerm, allUsers]);
 
-  const send = () => {
+  const send = async () => {
     const text = draft.trim();
     if (!text || !activeUserId) return;
-
     setDraft("");
 
-    if (stompRef.current && connectedRef.current) {
-      stompRef.current.send(
-        `/app/chat/${activeUserId}`,
-        {},
-        JSON.stringify({
+    try {
+      const convoRef = doc(db, "conversations", activeUserId);
+      await setDoc(
+        convoRef,
+        {
           userId: activeUserId,
-          text,
-          from: "admin",
-        })
+          lastMessage: text,
+          updatedAt: serverTimestamp(),
+        },
+        { merge: true }
       );
-      return;
+      await addDoc(collection(convoRef, "messages"), {
+        text,
+        from: "admin",
+        createdAt: serverTimestamp(),
+      });
+    } catch (err) {
+      setError(err.message || "Khong gui duoc tin nhan");
     }
-
-    setError("Mat ket noi chat");
   };
+
+  const activeUser = useMemo(
+    () => allUsers.find((u) => u.id === activeUserId) || null,
+    [allUsers, activeUserId]
+  );
 
   return (
     <div className="w-full h-[calc(100vh-80px)] bg-gray-50 rounded-xl border border-gray-200 overflow-hidden flex">
@@ -275,7 +150,7 @@ export default function AdminChat() {
       <div className="w-[320px] border-r bg-white">
         <div className="p-4 border-b">
           <div className="text-lg font-bold text-gray-900">Chat</div>
-          <div className="text-xs text-gray-500">Admin chat voi user</div>
+          <div className="text-xs text-gray-500">Admin chat qua Firebase</div>
         </div>
 
         <div className="p-3">
@@ -335,9 +210,7 @@ export default function AdminChat() {
             <div className="font-bold text-gray-900">
               {activeUser ? `User: ${activeUser.name}` : "Chon user de chat"}
             </div>
-            <div className="text-xs text-gray-500">
-              Du lieu qua WebSocket (API fake Spring Boot)
-            </div>
+            <div className="text-xs text-gray-500">Du lieu qua Firebase</div>
           </div>
         </div>
 
@@ -352,10 +225,7 @@ export default function AdminChat() {
             return (
               <div
                 key={m.id}
-                className={cn(
-                  "flex",
-                  isAdmin ? "justify-end" : "justify-start"
-                )}
+                className={cn("flex", isAdmin ? "justify-end" : "justify-start")}
               >
                 <div
                   className={cn(
@@ -365,16 +235,14 @@ export default function AdminChat() {
                       : "bg-white text-gray-900 border border-gray-200 rounded-bl-md"
                   )}
                 >
-                  <div className="whitespace-pre-wrap break-words">
-                    {m.text}
-                  </div>
+                  <div className="whitespace-pre-wrap break-words">{m.text}</div>
                   <div
                     className={cn(
                       "mt-1 text-[11px]",
                       isAdmin ? "text-white/80" : "text-gray-400"
                     )}
                   >
-                    {formatTime(m.at || m.createdAt)}
+                    {formatTime(m.createdAt || m.at)}
                   </div>
                 </div>
               </div>

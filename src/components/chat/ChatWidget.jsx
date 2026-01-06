@@ -1,38 +1,30 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { MessageCircle, Minus, Send, X } from "lucide-react";
-import SockJS from "sockjs-client/dist/sockjs";
-import Stomp from "stompjs";
+import {
+  addDoc,
+  collection,
+  doc,
+  onSnapshot,
+  orderBy,
+  query,
+  serverTimestamp,
+  setDoc,
+} from "firebase/firestore";
+import { db } from "../../lib/firebase";
 
-const getApiBase = () => {
-  // Vite: VITE_CHAT_API; CRA: REACT_APP_CHAT_API
-  if (typeof import.meta !== "undefined" && import.meta.env?.VITE_CHAT_API) {
-    return import.meta.env.VITE_CHAT_API;
-  }
-  if (typeof process !== "undefined" && process.env?.REACT_APP_CHAT_API) {
-    return process.env.REACT_APP_CHAT_API;
-  }
-  return "http://localhost:4000";
-};
-const API_BASE = getApiBase();
-const getWsUrl = () => {
-  if (typeof import.meta !== "undefined" && import.meta.env?.VITE_CHAT_WS) {
-    return import.meta.env.VITE_CHAT_WS.replace(/^ws/, "http");
-  }
-  if (typeof process !== "undefined" && process.env?.REACT_APP_CHAT_WS) {
-    return process.env.REACT_APP_CHAT_WS.replace(/^ws/, "http");
-  }
-  // Convert http(s) -> ws(s) and append /ws-chat
+const formatTime = (value) => {
   try {
-    const url = new URL(API_BASE);
-    // SockJS requires http/https endpoint; it will upgrade as needed
-    url.protocol = url.protocol === "https:" ? "https:" : "http:";
-    url.pathname = "/ws-chat";
-    return url.toString();
+    const d =
+      value?.toDate?.() instanceof Date
+        ? value.toDate()
+        : value instanceof Date
+          ? value
+          : new Date(value);
+    return d.toLocaleTimeString("vi-VN", { hour: "2-digit", minute: "2-digit" });
   } catch {
-    return "http://localhost:4000/ws-chat";
+    return "";
   }
 };
-const WS_URL = getWsUrl();
 
 export default function ChatWidget() {
   const username = useMemo(
@@ -46,8 +38,6 @@ export default function ChatWidget() {
   const [draft, setDraft] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
-  const stompRef = useRef(null);
-  const connectedRef = useRef(false);
 
   useEffect(() => {
     const handleStorage = (e) => {
@@ -57,103 +47,52 @@ export default function ChatWidget() {
     return () => window.removeEventListener("storage", handleStorage);
   }, []);
 
-  const fetchMessages = async () => {
-    setLoading(true);
-    setError("");
-    try {
-      const res = await fetch(
-        `${API_BASE}/api/chat/messages/${encodeURIComponent(userId)}`
-      );
-      if (!res.ok) throw new Error("Khong tai duoc tin nhan");
-      const data = await res.json();
-      setMessages(Array.isArray(data) ? data : Array.isArray(data?.data) ? data.data : []);
-    } catch (err) {
-      setError(err.message || "Loi tai tin nhan");
-    } finally {
-      setLoading(false);
-    }
-  };
-
+  // Realtime listener for this user's conversation
   useEffect(() => {
-    if (!isOpen) {
-      if (stompRef.current && connectedRef.current) {
-        stompRef.current.disconnect(() => {});
-      }
-      connectedRef.current = false;
-      return;
-    }
-
-    fetchMessages();
-
-    const socket = new SockJS(WS_URL);
-    const stomp = Stomp.over(socket);
-    stomp.debug = () => {}; // mute logs
-
-    stomp.connect(
-      {},
-      () => {
-        connectedRef.current = true;
-        stomp.subscribe(`/topic/chat/${userId}`, (msg) => {
-          try {
-            const body = JSON.parse(msg.body);
-            setMessages((prev) => {
-              if (prev.some((m) => m.id === body.id)) return prev;
-              return [...prev, body];
-            });
-          } catch {
-            // ignore
-          }
-        });
+    if (!isOpen) return undefined;
+    setLoading(true);
+    const q = query(
+      collection(db, "conversations", userId, "messages"),
+      orderBy("createdAt", "asc")
+    );
+    const unsub = onSnapshot(
+      q,
+      (snap) => {
+        setMessages(snap.docs.map((d) => ({ id: d.id, ...d.data() })));
+        setLoading(false);
       },
-      () => {
-        connectedRef.current = false;
-        setError("Mat ket noi chat");
+      (err) => {
+        setError(err.message || "Loi tai tin nhan");
+        setLoading(false);
       }
     );
-
-    stompRef.current = stomp;
-
-    return () => {
-      if (stompRef.current && connectedRef.current) {
-        stompRef.current.disconnect(() => {});
-      }
-      connectedRef.current = false;
-    };
+    return () => unsub();
   }, [isOpen, userId]);
 
-  const sendMessage = () => {
+  const sendMessage = async () => {
     const text = draft.trim();
     if (!text) return;
-
     setDraft("");
 
-    if (stompRef.current && connectedRef.current) {
-      stompRef.current.send(
-        `/app/chat/${userId}`,
-        {},
-        JSON.stringify({ userId, text, from: "user" })
+    try {
+      const convoRef = doc(db, "conversations", userId);
+      await setDoc(
+        convoRef,
+        {
+          userId,
+          lastMessage: text,
+          updatedAt: serverTimestamp(),
+        },
+        { merge: true }
       );
-      return;
+      await addDoc(collection(convoRef, "messages"), {
+        text,
+        from: "user",
+        createdAt: serverTimestamp(),
+      });
+    } catch (err) {
+      setError(err.message || "Gui tin nhan that bai");
     }
-
-    // fallback HTTP nếu WS không kết nối
-    const optimistic = {
-      id: `tmp_${Date.now()}`,
-      userId,
-      from: "user",
-      text,
-      createdAt: new Date().toISOString(),
-      read: true,
-    };
-    setMessages((prev) => [...prev, optimistic]);
-
-    fetch(`${API_BASE}/api/chat/messages`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ userId, text, from: "user" }),
-    })
-      .then(fetchMessages)
-      .catch(() => setError("Gui tin nhan that bai"));
   };
 
   return (
@@ -230,20 +169,14 @@ export default function ChatWidget() {
                         isUser ? "text-white/80" : "text-gray-400"
                       }`}
                     >
-                      {new Date(m.at || m.createdAt).toLocaleTimeString(
-                        "vi-VN",
-                        {
-                          hour: "2-digit",
-                          minute: "2-digit",
-                        }
-                      )}
+                      {formatTime(m.createdAt || m.at)}
                     </div>
                   </div>
                 </div>
               );
             })}
 
-            {!messages.length && (
+            {!messages.length && !loading && (
               <div className="text-xs text-gray-500 text-center">
                 Hay dat cau hoi hoac nhan tin cho Admin. Tin nhan duoc luu lai
                 de xem khi can.
